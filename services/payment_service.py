@@ -103,13 +103,7 @@ def process_refund(payment_id, amount_inr, notes=None):
         )
         return {"success": True, "refund": refund}
     except Exception as e:
-        return {
-            "success": True,
-            "refund": {
-                "id": f"refund_demo_{payment_id}",
-                "amount": int(amount_inr * 100),
-            },
-        }
+        return {"success": False, "error": str(e)}
 
 
 def get_payment_methods():

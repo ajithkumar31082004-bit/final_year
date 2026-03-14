@@ -33,7 +33,12 @@ superadmin_bp = Blueprint("superadmin", __name__)
 def superadmin_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        if "user_id" not in session or session.get("user_role") != "superadmin":
+        is_super = session.get("user_role") == "superadmin"
+        is_returning = (
+            session.get("is_impersonating")
+            and session.get("original_role") == "superadmin"
+        )
+        if "user_id" not in session or (not is_super and not is_returning):
             flash("Super Admin access required.", "danger")
             return redirect(url_for("auth.login"))
         return f(*args, **kwargs)
