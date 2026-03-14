@@ -17,6 +17,7 @@ import uuid, json
 from datetime import datetime, timedelta
 from functools import wraps
 from models.database import get_db
+from ml_models.models import get_demand_model
 
 manager_bp = Blueprint("manager", __name__)
 
@@ -145,6 +146,10 @@ def dashboard():
 
     conn.close()
 
+    demand_model = get_demand_model()
+    demand_forecast = demand_model.predict_next_30_days()
+    next_7_avg = demand_model.get_next_7_days_avg()
+
     rooms_by_floor = {}
     for r in rooms:
         rd = dict(r)
@@ -174,6 +179,8 @@ def dashboard():
         inventory=[dict(i) for i in inventory],
         low_stock=[dict(i) for i in low_stock],
         issues=[dict(i) for i in issues],
+        demand_forecast=demand_forecast,
+        demand_next_7_avg=next_7_avg,
     )
 
 

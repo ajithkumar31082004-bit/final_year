@@ -144,6 +144,40 @@
             </div>
         </div>
 
+        <!-- AI Demand Forecast -->
+        <div class="card" style="margin-bottom:1.75rem;">
+            <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
+                <span>ðŸ§  AI Demand Forecast (Next 7 Days)</span>
+                <span style="font-size:0.8rem;color:var(--text-light);">Avg bookings: {{ demand_next_7_avg }}</span>
+            </div>
+            {% if demand_forecast %}
+            <div class="table-container">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Predicted Bookings</th>
+                            <th>Occupancy %</th>
+                            <th>Confidence</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    {% for d in demand_forecast[:7] %}
+                        <tr>
+                            <td>{{ d.date }}</td>
+                            <td>{{ d.predicted_bookings }}</td>
+                            <td>{{ d.occupancy_pct }}%</td>
+                            <td>{{ d.confidence }}</td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div style="padding:2rem;text-align:center;color:var(--text-light);">Forecast unavailable</div>
+            {% endif %}
+        </div>
+
         <!-- Room Management -->
         <div class="card" style="margin-bottom:1.75rem;">
             <div class="card-header">

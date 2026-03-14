@@ -665,6 +665,7 @@ _ext_dynamic_pricing = _load_external_module("ai_dynamic_pricing", "ai_dynamic_p
 _ext_sentiment = _load_external_module("ai_sentiment", "ai_sentiment.py")
 _ext_fraud = _load_external_module("ai_fraud_detection", "ai_fraud_detection.py")
 _ext_cancellation = _load_external_module("ai_cancellation", "ai_cancellation.py")
+_ext_demand = _load_external_module("ai_demand_forecast", "ai_demand_forecast.py")
 
 
 class ExternalRecommendationAdapter:
@@ -803,6 +804,55 @@ class ExternalDynamicPricingAdapter:
         for rt in self.base_prices:
             result[rt] = self.calculate_price(rt, today, occupancy_pct)
         return result
+
+
+class ExternalDemandAdapter:
+    def __init__(self, module):
+        self.module = module
+        self.fallback = DemandForecastingModel()
+
+    def predict_next_30_days(self):
+        try:
+            preds = self.module.predict_next_30_days()
+        except Exception:
+            return self.fallback.predict_next_30_days()
+
+        normalized = []
+        for p in preds or []:
+            if not isinstance(p, dict):
+                continue
+            date_val = p.get("date")
+            predicted_bookings = p.get("predicted_bookings")
+            occupancy_pct = p.get("occupancy_pct")
+            if occupancy_pct is None:
+                occ_alt = p.get("predicted_occupancy") or p.get("occupancy")
+                if occ_alt is not None:
+                    occupancy_pct = float(occ_alt)
+            if predicted_bookings is None:
+                pred_alt = p.get("predicted_demand") or p.get("demand")
+                if pred_alt is not None:
+                    predicted_bookings = int(round(float(pred_alt)))
+            if occupancy_pct is None and predicted_bookings is not None:
+                occupancy_pct = round(min(100.0, predicted_bookings / 100 * 100), 1)
+            normalized.append(
+                {
+                    "date": date_val,
+                    "predicted_bookings": predicted_bookings,
+                    "occupancy_pct": occupancy_pct,
+                    "confidence": p.get("confidence"),
+                }
+            )
+
+        return normalized if normalized else self.fallback.predict_next_30_days()
+
+    def get_next_7_days_avg(self):
+        try:
+            if hasattr(self.module, "get_next_7_days_avg"):
+                return self.module.get_next_7_days_avg()
+        except Exception:
+            pass
+        preds = self.predict_next_30_days()[:7]
+        return round(sum(p.get("predicted_bookings", 0) for p in preds) / 7, 1)
 
 
 class ExternalSentimentAdapter:
@@ -968,7 +1018,10 @@ def get_recommendation_model():
 def get_demand_model():
     global _demand_model
     if not _demand_model:
-        _demand_model = DemandForecastingModel()
+        if _ext_demand:
+            _demand_model = ExternalDemandAdapter(_ext_demand)
+        else:
+            _demand_model = DemandForecastingModel()
     return _demand_model
 
 
