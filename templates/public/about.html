@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}About Us — Blissful Abodes{% endblock %}
+{% block content %}
+<div style="background:var(--gradient-hero);padding:5rem 0;text-align:center;">
+    <h1 style="color:white;font-size:3rem;font-family:var(--font-heading);">About Blissful Abodes</h1>
+    <p style="color:rgba(255,255,255,0.8);font-size:1.1rem;">Chennai's Premier Luxury Hotel Since 2010</p>
+</div>
+<section style="padding:5rem 0;">
+    <div class="container container-sm">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:3rem;align-items:center;margin-bottom:4rem;">
+            <div>
+                <div class="section-tag">🏨 Our Story</div>
+                <h2 class="section-title" style="text-align:left;">A Legacy of Luxury</h2>
+                <p style="color:var(--text-medium);line-height:1.8;margin-bottom:1rem;">Founded in 2010 by the Krishnamurthy family, Blissful Abodes Chennai was built on a single vision: to create the most memorable luxury hotel experience in South India.</p>
+                <p style="color:var(--text-medium);line-height:1.8;">Located steps from the iconic Marina Beach — the world's second longest urban beach — our hotel combines traditional Tamil hospitality with modern luxury amenities and cutting-edge AI technology.</p>
+            </div>
+            <div style="background:var(--gradient-dark);border-radius:20px;padding:3rem;text-align:center;color:white;">
+                <div style="font-size:5rem;margin-bottom:1rem;">🏨</div>
+                <h3 style="font-size:1.5rem;margin-bottom:0.5rem;">Blissful Abodes</h3>
+                <p style="color:rgba(255,255,255,0.7);">123 Marina Beach Road<br>Chennai - 600001<br>Tamil Nadu, India</p>
+                <div style="margin-top:1.5rem;padding-top:1.5rem;border-top:1px solid rgba(255,255,255,0.1);">
+                    <div style="font-size:2rem;font-weight:700;color:var(--gold-light);">14+ Years</div>
+                    <div style="color:rgba(255,255,255,0.6);font-size:0.85rem;">of Excellence</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Awards & Certifications -->
+        <div style="background:var(--bg-cream);border-radius:20px;padding:2rem;text-align:center;margin-bottom:3rem;">
+            <h3 style="margin-bottom:1.5rem;">🏆 Awards & Recognition</h3>
+            <div style="display:flex;gap:2rem;justify-content:center;flex-wrap:wrap;">
+                <div style="text-align:center;"><div style="font-size:2.5rem;">🥇</div><div style="font-size:0.85rem;color:var(--text-light);margin-top:0.5rem;">Best Luxury Hotel<br>Tamil Nadu 2023</div></div>
+                <div style="text-align:center;"><div style="font-size:2.5rem;">⭐</div><div style="font-size:0.85rem;color:var(--text-light);margin-top:0.5rem;">TripAdvisor<br>Certificate 2024</div></div>
+                <div style="text-align:center;"><div style="font-size:2.5rem;">🌿</div><div style="font-size:0.85rem;color:var(--text-light);margin-top:0.5rem;">Green Hotel<br>Award 2024</div></div>
+                <div style="text-align:center;"><div style="font-size:2.5rem;">🤖</div><div style="font-size:0.85rem;color:var(--text-light);margin-top:0.5rem;">AI Innovation<br>Award 2024</div></div>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}

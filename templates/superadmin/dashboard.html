@@ -1,0 +1,356 @@
+{% extends "base.html" %}
+{% block title %}Super Admin — Blissful Abodes{% endblock %}
+{% block content %}
+<div class="dashboard-layout">
+    <aside class="sidebar">
+        <div class="sidebar-header">
+            <div style="font-size:2.5rem;">👑</div>
+            <div class="sidebar-user-name">{{ user.first_name }} {{ user.last_name }}</div>
+            <div class="sidebar-user-role" style="background:rgba(212,175,55,0.3);color:var(--gold-light);">SUPER ADMIN</div>
+        </div>
+        <ul class="sidebar-nav">
+            <li><a href="{{ url_for('superadmin.dashboard') }}" class="nav-link active"><span class="icon">📊</span> Command Center</a></li>
+            <li><a href="{{ url_for('superadmin.audit_logs') }}" class="nav-link"><span class="icon">📝</span> Audit Logs</a></li>
+            <li><a href="{{ url_for('superadmin.ml_analytics') }}" class="nav-link"><span class="icon">🤖</span> ML Analytics</a></li>
+            <div class="sidebar-section-title">OPERATIONS</div>
+            <li><a href="{{ url_for('admin.bookings') }}" class="nav-link"><span class="icon">📋</span> All Bookings</a></li>
+            <li><a href="{{ url_for('admin.user_management') }}" class="nav-link"><span class="icon">👥</span> User Management</a></li>
+            <li><a href="{{ url_for('admin.room_management') }}" class="nav-link"><span class="icon">🛏️</span> Room Management</a></li>
+            <div class="sidebar-section-title">ACCOUNT</div>
+            <li><a href="{{ url_for('auth.logout') }}" class="nav-link"><span class="icon">🚪</span> Logout</a></li>
+        </ul>
+    </aside>
+    
+    <main class="main-content">
+        <div class="page-header">
+            <div>
+                <h1 class="page-title">👑 Command Center</h1>
+                <div class="page-subtitle">Super Admin — Full system visibility and control</div>
+            </div>
+            <div style="display:flex;gap:0.75rem;">
+                <button onclick="document.getElementById('createUserModal').classList.add('show')" class="btn btn-gold">+ Create User</button>
+                <button onclick="toggleMaintenanceMode()" class="btn btn-dark">🔧 Maintenance</button>
+            </div>
+        </div>
+        
+        <!-- MEGA Stats -->
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1.25rem;margin-bottom:1.75rem;">
+            <div class="stat-card" style="border-left-color:var(--gold);background:linear-gradient(135deg,#1A1A2E,#16213E);color:white;">
+                <div class="stat-icon" style="background:rgba(212,175,55,0.2);">💎</div>
+                <div><div class="stat-value" style="color:var(--gold-light);">₹{{ "{:,.0f}".format(mega_stats.lifetime_revenue) }}</div><div class="stat-label" style="color:rgba(255,255,255,0.6);">Lifetime Revenue</div></div>
+            </div>
+            <div class="stat-card orange">
+                <div class="stat-icon orange">📅</div>
+                <div><div class="stat-value">₹{{ "{:,.0f}".format(mega_stats.ytd_revenue) }}</div><div class="stat-label">Year-to-Date Revenue</div></div>
+            </div>
+            <div class="stat-card success">
+                <div class="stat-icon success">🏨</div>
+                <div><div class="stat-value">{{ mega_stats.overall_occupancy }}%</div><div class="stat-label">Occupancy Rate</div></div>
+            </div>
+            <div class="stat-card info">
+                <div class="stat-icon info">📋</div>
+                <div><div class="stat-value">{{ mega_stats.total_bookings }}</div><div class="stat-label">Total Bookings Ever</div></div>
+            </div>
+        </div>
+        
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1.25rem;margin-bottom:1.75rem;">
+            <div class="stat-card danger">
+                <div class="stat-icon danger">👥</div>
+                <div><div class="stat-value">{{ mega_stats.active_staff }}</div><div class="stat-label">Active Staff</div></div>
+            </div>
+            <div class="stat-card gold">
+                <div class="stat-icon gold">🏆</div>
+                <div><div class="stat-value">{{ mega_stats.loyalty_members }}</div><div class="stat-label">Loyalty Members</div></div>
+            </div>
+            <div class="stat-card orange">
+                <div class="stat-icon orange">⭐</div>
+                <div><div class="stat-value">{{ mega_stats.avg_rating }}/5.0</div><div class="stat-label">Avg Guest Rating</div></div>
+            </div>
+            <div class="stat-card info">
+                <div class="stat-icon info">💰</div>
+                <div><div class="stat-value">₹{{ "{:,.0f}".format(mega_stats.today_revenue) }}</div><div class="stat-label">Today's Revenue</div></div>
+            </div>
+        </div>
+        
+        <!-- Revenue Target Progress -->
+        <div class="card" style="margin-bottom:1.75rem;">
+            <div class="card-header"><span>🎯 Annual Target Progress (₹{{ "{:,.0f}".format(annual_target) }})</span><span class="badge badge-{{ 'success' if target_progress > 50 else 'warning' }}">{{ target_progress }}% achieved</span></div>
+            <div class="card-body">
+                <div class="progress-bar" style="height:20px;background:rgba(0,0,0,0.08);border-radius:20px;">
+                    <div class="progress-fill" style="width:{{ target_progress }}%;height:100%;background:var(--gradient-warm);display:flex;align-items:center;justify-content:flex-end;padding-right:0.5rem;">
+                        <span style="font-size:0.7rem;font-weight:700;color:white;">{{ target_progress }}%</span>
+                    </div>
+                </div>
+                <div style="display:flex;justify-content:space-between;font-size:0.8rem;color:var(--text-light);margin-top:0.5rem;">
+                    <span>YTD: ₹{{ "{:,.0f}".format(mega_stats.ytd_revenue) }}</span>
+                    <span>Target: ₹{{ "{:,.0f}".format(annual_target) }}</span>
+                </div>
+            </div>
+        </div>
+        
+        <div style="display:grid;grid-template-columns:2fr 1fr;gap:1.5rem;margin-bottom:1.75rem;">
+            <!-- Year Revenue Chart -->
+            <div class="card">
+                <div class="card-header"><span>📈 Multi-Year Revenue Trend</span></div>
+                <div class="card-body"><div class="chart-container"><canvas id="yearChart"></canvas></div></div>
+            </div>
+            
+            <!-- System Status -->
+            <div class="card">
+                <div class="card-header"><span>⚙️ System Status</span></div>
+                <div class="card-body">
+                    {% for service, info in system_status.items() %}
+                    <div style="display:flex;justify-content:space-between;align-items:center;padding:0.6rem 0;border-bottom:1px solid rgba(0,0,0,0.05);">
+                        <span style="font-size:0.875rem;font-weight:500;">{{ service|title }}</span>
+                        <span class="badge badge-{{ info.color }}">{{ info.status }}</span>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        
+        <!-- All Users Table -->
+        <div class="card" style="margin-bottom:1.75rem;">
+            <div class="card-header">
+                <span>👥 All Users ({{ all_users|length }})</span>
+                <button onclick="document.getElementById('createUserModal').classList.add('show')" class="btn btn-sm btn-primary">+ Add User</button>
+            </div>
+            <div class="table-container">
+            <table class="data-table">
+                <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Dept</th><th>Shift</th><th>Phone</th><th>Status</th><th>Points</th><th>Actions</th></tr></thead>
+                <tbody>
+                {% for u in all_users %}
+                <tr>
+                    <td>{{ u.first_name }} {{ u.last_name }}</td>
+                    <td style="font-size:0.8rem;">{{ u.email }}</td>
+                    <td>
+                        <select id="role_{{ u.user_id }}" class="form-control" style="width:auto;">
+                            <option value="guest" {% if u.role == 'guest' %}selected{% endif %}>Guest</option>
+                            <option value="staff" {% if u.role == 'staff' %}selected{% endif %}>Staff</option>
+                            <option value="manager" {% if u.role == 'manager' %}selected{% endif %}>Manager</option>
+                            <option value="admin" {% if u.role == 'admin' %}selected{% endif %}>Admin</option>
+                            <option value="superadmin" {% if u.role == 'superadmin' %}selected{% endif %}>Superadmin</option>
+                        </select>
+                    </td>
+                    <td><input id="dept_{{ u.user_id }}" class="form-control" style="width:120px;" value="{{ u.department or '' }}"></td>
+                    <td><input id="shift_{{ u.user_id }}" class="form-control" style="width:90px;" value="{{ u.shift or '' }}"></td>
+                    <td><input id="phone_{{ u.user_id }}" class="form-control" style="width:120px;" value="{{ u.phone or '' }}"></td>
+                    <td><span class="badge badge-{{ 'success' if u.is_active else 'danger' }}">{{ 'Active' if u.is_active else 'Inactive' }}</span></td>
+                    <td>{{ u.loyalty_points or 0 }}</td>
+                    <td>
+                        <button class="btn btn-sm btn-primary" onclick="updateUser('{{ u.user_id }}')">Save</button>
+                        <button class="btn btn-sm btn-warning" onclick="toggleUser('{{ u.user_id }}')">{{ '🔒 Deactivate' if u.is_active else '🔓 Activate' }}</button>
+                        {% if u.role != 'superadmin' %}
+                        <button class="btn btn-sm btn-info" onclick="impersonateUser('{{ u.user_id }}')">👥 View As</button>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            </div>
+        </div>
+
+        <!-- Admin Management -->
+        <div class="card" style="margin-bottom:1.75rem;">
+            <div class="card-header">
+                <span>🛡 Admin Management ({{ admin_users|length }})</span>
+                <button onclick="document.getElementById('createUserModal').classList.add('show')" class="btn btn-sm btn-gold">+ Create Admin</button>
+            </div>
+            {% if admin_users %}
+            <div class="table-container">
+            <table class="data-table">
+                <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Dept</th><th>Phone</th><th>Status</th><th>Actions</th></tr></thead>
+                <tbody>
+                {% for a in admin_users %}
+                <tr>
+                    <td>{{ a.first_name }} {{ a.last_name }}</td>
+                    <td style="font-size:0.8rem;">{{ a.email }}</td>
+                    <td>
+                        <select id="admin_role_{{ a.user_id }}" class="form-control" style="width:auto;">
+                            <option value="admin" {% if a.role == 'admin' %}selected{% endif %}>Admin</option>
+                            <option value="superadmin" {% if a.role == 'superadmin' %}selected{% endif %}>Superadmin</option>
+                        </select>
+                    </td>
+                    <td><input id="admin_dept_{{ a.user_id }}" class="form-control" style="width:120px;" value="{{ a.department or '' }}"></td>
+                    <td><input id="admin_phone_{{ a.user_id }}" class="form-control" style="width:120px;" value="{{ a.phone or '' }}"></td>
+                    <td><span class="badge badge-{{ 'success' if a.is_active else 'danger' }}">{{ 'Active' if a.is_active else 'Inactive' }}</span></td>
+                    <td>
+                        <button class="btn btn-sm btn-primary" onclick="updateAdmin('{{ a.user_id }}')">Save</button>
+                        <button class="btn btn-sm btn-warning" onclick="toggleUser('{{ a.user_id }}')">{{ 'Deactivate' if a.is_active else 'Activate' }}</button>
+                    </td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            </div>
+            {% else %}
+            <div style="padding:2rem;text-align:center;color:var(--text-light);">No admins found</div>
+            {% endif %}
+        </div>
+
+        <!-- Security & Fraud Monitoring -->
+        <div class="card" style="margin-bottom:1.75rem;">
+            <div class="card-header"><span>🔐 Security & Fraud Monitoring</span></div>
+            {% if flagged_bookings %}
+            <div class="table-container">
+            <table class="data-table">
+                <thead><tr><th>Booking</th><th>Guest</th><th>Fraud Score</th><th>Status</th></tr></thead>
+                <tbody>
+                {% for b in flagged_bookings %}
+                <tr>
+                    <td>{{ b.booking_id }}</td>
+                    <td>{{ b.first_name }} {{ b.last_name }}</td>
+                    <td>{{ (b.fraud_score * 100) | round(1) }}%</td>
+                    <td><span class="badge badge-warning">Flagged</span></td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            </div>
+            {% else %}
+            <div style="padding:2rem;text-align:center;color:var(--text-light);">No suspicious activity</div>
+            {% endif %}
+        </div>
+
+        <!-- System Configuration -->
+        <div class="card" style="margin-bottom:1.75rem;">
+            <div class="card-header"><span>🧰 System Configuration</span></div>
+            <div class="card-body" style="display:flex;gap:0.75rem;flex-wrap:wrap;">
+                <button class="btn btn-outline" onclick="backupDatabase()">Backup Database</button>
+                <button class="btn btn-outline" onclick="restoreDatabase()">Restore Database</button>
+            </div>
+        </div>
+        
+        <!-- Audit Logs Preview -->
+        <div class="card">
+            <div class="card-header">
+                <span>📝 Recent Audit Logs</span>
+                <a href="{{ url_for('superadmin.audit_logs') }}" class="btn btn-sm btn-outline">View All</a>
+            </div>
+            <div class="table-container">
+            <table class="data-table">
+                <thead><tr><th>Time</th><th>Action</th><th>User</th><th>Details</th></tr></thead>
+                <tbody>
+                {% for log in audit_logs[:15] %}
+                <tr>
+                    <td style="font-size:0.78rem;white-space:nowrap;">{{ log.created_at[:16] }}</td>
+                    <td><span class="badge badge-primary">{{ log.action }}</span></td>
+                    <td style="font-size:0.8rem;">{{ log.first_name or 'System' }}</td>
+                    <td style="font-size:0.78rem;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ log.details or '—' }}</td>
+                </tr>
+                {% else %}
+                <tr><td colspan="4" style="text-align:center;color:var(--text-light);">No audit logs yet</td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            </div>
+        </div>
+    </main>
+</div>
+
+<!-- Create User Modal -->
+<div class="modal-overlay" id="createUserModal">
+    <div class="modal" style="max-width:500px;">
+        <div class="modal-header">
+            <h3 class="modal-title">👑 Create Any User</h3>
+            <button class="modal-close" onclick="document.getElementById('createUserModal').classList.remove('show')">&times;</button>
+        </div>
+        <form method="POST" action="{{ url_for('superadmin.create_any_user') }}">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+                <div class="form-group"><label class="form-label">First Name</label><input type="text" name="first_name" class="form-control" required></div>
+                <div class="form-group"><label class="form-label">Last Name</label><input type="text" name="last_name" class="form-control" required></div>
+            </div>
+            <div class="form-group"><label class="form-label">Email</label><input type="email" name="email" class="form-control" required></div>
+            <div class="form-group"><label class="form-label">Phone</label><input type="tel" name="phone" class="form-control"></div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+                <div class="form-group"><label class="form-label">Role</label>
+                    <select name="role" class="form-control">
+                        <option value="guest">Guest</option>
+                        <option value="staff">Staff</option>
+                        <option value="manager">Manager</option>
+                        <option value="admin">Admin</option>
+                        <option value="superadmin">Super Admin</option>
+                    </select>
+                </div>
+                <div class="form-group"><label class="form-label">Department</label><input type="text" name="department" class="form-control" placeholder="Housekeeping"></div>
+            </div>
+            <div class="form-group"><label class="form-label">Password</label><input type="password" name="password" class="form-control" value="Admin@123"></div>
+            <button type="submit" class="btn btn-gold btn-block">👑 Create User</button>
+        </form>
+    </div>
+</div>
+
+<script>
+const yearData = {{ year_data | tojson }};
+new Chart(document.getElementById('yearChart').getContext('2d'), {
+    type: 'bar',
+    data: {
+        labels: yearData.map(d => d.year),
+        datasets: [{ label: 'Revenue', data: yearData.map(d => d.revenue), backgroundColor: 'rgba(212,175,55,0.7)', borderColor: '#D4AF37', borderWidth: 2, borderRadius: 8 }]
+    },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
+               scales: { y: { ticks: { callback: v => '₹' + (v/100000).toFixed(1) + 'L' } } } }
+});
+
+function toggleUser(userId) {
+    if (!confirm('Toggle user status?')) return;
+    fetch(`/superadmin/users/${userId}/delete`, {method:'POST'}).then(() => location.reload());
+}
+function updateUser(userId) {
+    const payload = {
+        role: document.getElementById(`role_${userId}`).value,
+        department: document.getElementById(`dept_${userId}`).value,
+        shift: document.getElementById(`shift_${userId}`).value,
+        phone: document.getElementById(`phone_${userId}`).value
+    };
+    fetch(`/superadmin/users/${userId}/update`, {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify(payload)
+    }).then(r => r.json()).then(d => {
+        if (d.success) showToast('User updated');
+    });
+}
+function updateAdmin(userId) {
+    const payload = {
+        role: document.getElementById(`admin_role_${userId}`).value,
+        department: document.getElementById(`admin_dept_${userId}`).value,
+        phone: document.getElementById(`admin_phone_${userId}`).value
+    };
+    fetch(`/superadmin/users/${userId}/update`, {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify(payload)
+    }).then(r => r.json()).then(d => {
+        if (d.success) showToast('Admin updated');
+    });
+}
+function impersonateUser(userId) {
+    if (!confirm('Impersonate this user? You will be redirected to their dashboard.')) return;
+    fetch(`/superadmin/impersonate/${userId}`, {method:'POST'}).then(r => r.json()).then(d => {
+        if (d.success) { showToast('Impersonation started'); window.location = d.redirect; }
+    });
+}
+function toggleMaintenanceMode() {
+    fetch('/superadmin/system/maintenance-mode', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({enable: true})})
+        .then(r => r.json()).then(d => showToast(d.message));
+}
+function backupDatabase() {
+    fetch('/superadmin/system/backup', {method:'POST'}).then(r => r.json()).then(d => {
+        if (d.success) showToast(`Backup created: ${d.backup}`);
+    });
+}
+function restoreDatabase() {
+    const name = prompt('Enter backup file name to restore:');
+    if (!name) return;
+    fetch('/superadmin/system/restore', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({backup: name})
+    }).then(r => r.json()).then(d => {
+        if (d.success) showToast(d.message);
+    });
+}
+</script>
+{% endblock %}

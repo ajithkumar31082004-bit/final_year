@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% block title %}{{ room.room_type }} {{ room.room_number }} - Blissful Abodes{% endblock %}
+{% block content %}
+<div style="background:var(--gradient-dark);padding:3rem 0;text-align:center;">
+  <h1 style="color:white;font-family:var(--font-heading);">{{ room.room_type }} Room</h1>
+  <p style="color:rgba(255,255,255,0.7);">Room {{ room.room_number }} - Floor {{ room.floor }} - {{ room.view_type or 'City View' }}</p>
+</div>
+
+<section style="padding:3.5rem 0;background:var(--bg-cream);">
+  <div class="container">
+    <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:2rem;align-items:start;">
+      <div class="card">
+        <div class="card-body">
+          {% if room.room_type == 'VIP Suite' %}
+          {% set fallback_file = 'images/rooms/vip.svg' %}
+          {% elif room.room_type == 'Couple' %}
+          {% set fallback_file = 'images/rooms/couple.svg' %}
+          {% elif room.room_type == 'Family' %}
+          {% set fallback_file = 'images/rooms/family.svg' %}
+          {% elif room.room_type == 'Double' %}
+          {% set fallback_file = 'images/rooms/double.svg' %}
+          {% else %}
+          {% set fallback_file = 'images/rooms/single.svg' %}
+          {% endif %}
+          {% set fallback_img = url_for('static', filename=fallback_file) %}
+          <div style="border-radius:16px;overflow:hidden;box-shadow:var(--shadow-md);">
+            <img src="{{ room.primary_image if room.primary_image else (room.images[0] if room.images and room.images|length > 0 else fallback_img) }}" alt="{{ room.room_type }}" style="width:100%;height:360px;object-fit:cover;" onerror="this.onerror=null;this.src='{{ fallback_img }}';">
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.5rem;margin-top:0.75rem;">
+            {% if room.images and room.images|length > 0 %}
+            {% for img in room.images[:4] %}
+            <img src="{{ img }}" alt="" style="width:100%;height:90px;object-fit:cover;border-radius:10px;" onerror="this.onerror=null;this.src='{{ fallback_img }}';">
+            {% endfor %}
+            {% else %}
+            <img src="{{ fallback_img }}" alt="" style="width:100%;height:90px;object-fit:cover;border-radius:10px;">
+            {% endif %}
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="card" style="margin-bottom:1.25rem;">
+          <div class="card-header"><span>Room Overview</span></div>
+          <div class="card-body">
+            <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.75rem;">
+              <div class="price-amount">INR {{ "{:,.0f}".format(room.current_price) }}</div>
+              <div class="price-per">per night</div>
+            </div>
+            <div style="color:var(--text-light);font-size:0.9rem;margin-bottom:1rem;">GST 18% applies - Check-in 2:00 PM - Check-out 12:00 PM</div>
+            <a class="btn btn-primary btn-block" href="{{ url_for('guest.book_room', room_id=room.room_id) }}">Book This Room</a>
+          </div>
+        </div>
+
+        <div class="card" style="margin-bottom:1.25rem;">
+          <div class="card-header"><span>Highlights</span></div>
+          <div class="card-body">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;font-size:0.9rem;">
+              <div><strong>Bed:</strong> {{ room.bed_type }}</div>
+              <div><strong>Size:</strong> {{ room.size_sqft }} sq.ft</div>
+              <div><strong>View:</strong> {{ room.view_type or 'City View' }}</div>
+              <div><strong>Max Guests:</strong> {{ room.max_guests }}</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header"><span>Amenities</span></div>
+          <div class="card-body">
+            <div class="room-amenities">
+              {% for a in room.amenities %}
+              <span class="amenity-tag">{{ a }}</span>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top:2rem;">
+      <div class="card">
+        <div class="card-header"><span>Guest Reviews</span></div>
+        <div class="card-body">
+          {% if reviews %}
+          <div style="display:grid;gap:1rem;">
+            {% for r in reviews %}
+            <div style="padding:1rem;border:1px solid rgba(0,0,0,0.06);border-radius:12px;background:white;">
+              <div style="display:flex;justify-content:space-between;align-items:center;">
+                <div style="font-weight:600;">{{ r.first_name }} {{ r.last_name }}</div>
+                <div style="color:#ffb800;">{{ "*" * r.overall_rating|int }}</div>
+              </div>
+              <div style="color:var(--text-light);font-size:0.85rem;margin-top:0.4rem;">{{ r.comment }}</div>
+              {% if r.staff_response %}
+              <div style="margin-top:0.6rem;padding:0.6rem;border-left:3px solid var(--primary);background:rgba(255,107,53,0.05);font-size:0.8rem;">
+                <strong>Staff Response:</strong> {{ r.staff_response }}
+              </div>
+              {% endif %}
+            </div>
+            {% endfor %}
+          </div>
+          {% else %}
+          <div style="text-align:center;color:var(--text-light);">No reviews yet. Be the first to review this room.</div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+{% endblock %}
+

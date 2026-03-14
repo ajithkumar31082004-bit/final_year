@@ -1,0 +1,138 @@
+﻿{% extends "base.html" %}
+{% block title %}Analytics - Admin{% endblock %}
+{% block content %}
+<div class="dashboard-layout">
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <div style="font-size:2rem;">Admin</div>
+      <div class="sidebar-user-name">{{ current_user.first_name }} {{ current_user.last_name }}</div>
+      <div class="sidebar-user-role">Administrator</div>
+    </div>
+    <ul class="sidebar-nav">
+      <li><a href="{{ url_for('admin.dashboard') }}" class="nav-link"><span class="icon"><i class="fa-solid fa-chart-line"></i></span> Dashboard</a></li>
+      <li><a href="{{ url_for('admin.bookings') }}" class="nav-link"><span class="icon"><i class="fa-solid fa-receipt"></i></span> Bookings</a></li>
+      <li><a href="{{ url_for('admin.user_management') }}" class="nav-link"><span class="icon"><i class="fa-solid fa-users"></i></span> Users</a></li>
+      <li><a href="{{ url_for('admin.room_management') }}" class="nav-link"><span class="icon"><i class="fa-solid fa-bed"></i></span> Rooms</a></li>
+      <li><a href="{{ url_for('admin.analytics') }}" class="nav-link active"><span class="icon"><i class="fa-solid fa-chart-column"></i></span> Analytics</a></li>
+      <li><a href="{{ url_for('admin.review_management') }}" class="nav-link"><span class="icon"><i class="fa-solid fa-star"></i></span> Reviews</a></li>
+      <div class="sidebar-section-title">SYSTEM</div>
+      <li><a href="{{ url_for('auth.logout') }}" class="nav-link"><span class="icon"><i class="fa-solid fa-right-from-bracket"></i></span> Logout</a></li>
+    </ul>
+  </aside>
+
+  <main class="main-content">
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">Analytics</h1>
+        <div class="page-subtitle">Revenue, demand forecast, and booking sources</div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:2fr 1fr;gap:1.5rem;margin-bottom:1.5rem;">
+      <div class="card">
+        <div class="card-header"><span>Revenue Trend</span></div>
+        <div class="card-body"><div class="chart-container" style="height:280px;"><canvas id="revChart"></canvas></div></div>
+      </div>
+      <div class="card">
+        <div class="card-header"><span>Booking Sources</span></div>
+        <div class="card-body"><div class="chart-container" style="height:280px;"><canvas id="sourceChart"></canvas></div></div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin-bottom:1.5rem;">
+      <div class="card">
+        <div class="card-header"><span>Room Type Performance</span></div>
+        <div class="card-body"><div class="chart-container" style="height:260px;"><canvas id="roomChart"></canvas></div></div>
+      </div>
+      <div class="card">
+        <div class="card-header"><span>Demand Forecast (30 Days)</span></div>
+        <div class="card-body"><div class="chart-container" style="height:260px;"><canvas id="forecastChart"></canvas></div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><span>Current Dynamic Prices</span></div>
+      <div class="table-container">
+        <table class="data-table">
+          <thead><tr><th>Room Type</th><th>Base Price</th><th>Multiplier</th><th>Final Price</th><th>Rules Applied</th></tr></thead>
+          <tbody>
+            {% for rt, data in current_prices.items() %}
+            <tr>
+              <td>{{ rt }}</td>
+              <td>INR {{ "{:,.0f}".format(data.base_price) }}</td>
+              <td>{{ data.multiplier }}</td>
+              <td>INR {{ "{:,.0f}".format(data.final_price) }}</td>
+              <td style="font-size:0.8rem;color:var(--text-light);">{{ ', '.join(data.rules_applied) if data.rules_applied else 'Standard' }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+const revenueData = {{ revenue_chart | tojson }};
+const paymentMethods = {{ payment_methods | tojson }};
+const roomPerf = {{ room_perf | tojson }};
+const forecast = {{ forecast | tojson }};
+
+new Chart(document.getElementById('revChart').getContext('2d'), {
+  type: 'line',
+  data: {
+    labels: revenueData.map(d => d.month),
+    datasets: [{
+      label: 'Revenue (INR)',
+      data: revenueData.map(d => d.revenue),
+      borderColor: '#FF6B35',
+      backgroundColor: 'rgba(255,107,53,0.12)',
+      fill: true,
+      tension: 0.35
+    }]
+  },
+  options: {responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}}
+});
+
+new Chart(document.getElementById('sourceChart').getContext('2d'), {
+  type: 'doughnut',
+  data: {
+    labels: paymentMethods.map(p => p.payment_method || 'Unknown'),
+    datasets: [{
+      data: paymentMethods.map(p => p.count),
+      backgroundColor: ['#FF6B35','#D4AF37','#28A745','#17A2B8','#FFC107','#6c757d']
+    }]
+  },
+  options: {responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom'}}}
+});
+
+new Chart(document.getElementById('roomChart').getContext('2d'), {
+  type: 'bar',
+  data: {
+    labels: roomPerf.map(r => r.room_type),
+    datasets: [{
+      label: 'Revenue',
+      data: roomPerf.map(r => r.revenue),
+      backgroundColor: 'rgba(23,162,184,0.6)'
+    }]
+  },
+  options: {responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}}
+});
+
+new Chart(document.getElementById('forecastChart').getContext('2d'), {
+  type: 'line',
+  data: {
+    labels: forecast.map(f => f.date),
+    datasets: [{
+      label: 'Predicted Bookings',
+      data: forecast.map(f => f.predicted_bookings || f.predicted_occupancy || 0),
+      borderColor: '#28A745',
+      backgroundColor: 'rgba(40,167,69,0.12)',
+      fill: true,
+      tension: 0.35
+    }]
+  },
+  options: {responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}}
+});
+</script>
+{% endblock %}

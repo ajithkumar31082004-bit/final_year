@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+{% block title %}Guest Dashboard — Blissful Abodes{% endblock %}
+{% block content %}
+<div class="dashboard-layout">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+        <div class="sidebar-header">
+            <div style="font-size:2rem;margin-bottom:0.5rem;">🙏</div>
+            <div class="sidebar-user-name">{{ user.first_name }} {{ user.last_name }}</div>
+            <div class="sidebar-user-role">{{ user.tier_level }} Member</div>
+            <div style="color:var(--gold-light);font-size:0.8rem;margin-top:0.4rem;">⭐ {{ user.loyalty_points|default(0) }} Points</div>
+        </div>
+        <ul class="sidebar-nav">
+            <li><a href="{{ url_for('guest.dashboard') }}" class="nav-link active"><span class="icon">📊</span> Dashboard</a></li>
+            <li><a href="{{ url_for('guest.room_listing') }}" class="nav-link"><span class="icon">🛏️</span> Browse Rooms</a></li>
+            <li><a href="{{ url_for('guest.my_bookings') }}" class="nav-link"><span class="icon">📋</span> My Bookings</a></li>
+            <li><a href="{{ url_for('guest.loyalty') }}" class="nav-link"><span class="icon">🏆</span> Loyalty & Rewards</a></li>
+            <div class="sidebar-section-title">ACCOUNT</div>
+            <li><a href="{{ url_for('auth.logout') }}" class="nav-link"><span class="icon">🚪</span> Logout</a></li>
+        </ul>
+    </aside>
+    
+    <main class="main-content">
+        <!-- Page Header -->
+        <div class="page-header">
+            <div>
+                <h1 class="page-title">🙏 Namaste, {{ user.first_name }}!</h1>
+                <div class="page-subtitle">Welcome back to Blissful Abodes. Your luxury awaits.</div>
+            </div>
+            <a href="{{ url_for('guest.room_listing') }}" class="btn btn-primary">🛏️ Book a Room</a>
+        </div>
+        
+        <!-- Stats -->
+        <div class="stats-grid" style="margin-bottom:1.75rem;">
+            <div class="stat-card orange">
+                <div class="stat-icon orange">📋</div>
+                <div><div class="stat-value">{{ upcoming_bookings|length }}</div><div class="stat-label">Upcoming Stays</div></div>
+            </div>
+            <div class="stat-card gold">
+                <div class="stat-icon gold">🏨</div>
+                <div><div class="stat-value">{{ past_bookings_count }}</div><div class="stat-label">Past Bookings</div></div>
+            </div>
+            <div class="stat-card success">
+                <div class="stat-icon success">💰</div>
+                <div><div class="stat-value">₹{{ "{:,.0f}".format(total_spent) }}</div><div class="stat-label">Total Spent</div></div>
+            </div>
+            <div class="stat-card info">
+                <div class="stat-icon info">⭐</div>
+                <div><div class="stat-value">{{ user.loyalty_points|default(0) }}</div><div class="stat-label">Loyalty Points</div></div>
+            </div>
+        </div>
+        
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;">
+            <!-- Upcoming Bookings -->
+            <div class="card">
+                <div class="card-header">
+                    <span>📅 Upcoming Bookings</span>
+                    <a href="{{ url_for('guest.my_bookings') }}" style="font-size:0.8rem;color:var(--primary);">View all</a>
+                </div>
+                <div class="card-body">
+                    {% if upcoming_bookings %}
+                        {% for b in upcoming_bookings %}
+                        <div style="padding:1rem;border-radius:12px;background:var(--bg-cream);margin-bottom:0.75rem;">
+                            <div style="display:flex;justify-content:space-between;align-items:start;">
+                                <div>
+                                    <div style="font-weight:600;">Room {{ b.room_number }} — {{ b.room_type }}</div>
+                                    <div style="font-size:0.8rem;color:var(--text-light);">{{ b.check_in }} → {{ b.check_out }}</div>
+                                </div>
+                                {% if b.days_until == 0 %}
+                                <span class="badge badge-danger">Today!</span>
+                                {% elif b.days_until == 1 %}
+                                <span class="badge badge-warning">Tomorrow</span>
+                                {% else %}
+                                <span class="badge badge-success">{{ b.days_until }} days</span>
+                                {% endif %}
+                            </div>
+                            <div style="display:flex;gap:0.5rem;margin-top:0.75rem;">
+                                <a href="{{ url_for('guest.booking_detail', booking_id=b.booking_id) }}" class="btn btn-sm btn-outline" style="font-size:0.75rem;">View Details</a>
+                                <a href="{{ url_for('guest.download_invoice', booking_id=b.booking_id) }}" class="btn btn-sm btn-gold" style="font-size:0.75rem;">📄 Invoice</a>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                    <div style="text-align:center;padding:2rem;color:var(--text-light);">
+                        <div style="font-size:3rem;margin-bottom:1rem;">🛏️</div>
+                        <p>No upcoming bookings</p>
+                        <a href="{{ url_for('guest.room_listing') }}" class="btn btn-primary btn-sm" style="margin-top:1rem;">Book Now</a>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <!-- Loyalty Card -->
+            <div>
+                <div class="loyalty-card" style="margin-bottom:1.5rem;">
+                    <div class="tier-badge tier-{{ user.tier_level|lower }}">
+                        {{ '🥈' if user.tier_level == 'Silver' else '🥇' if user.tier_level == 'Gold' else '💎' }} {{ user.tier_level }} Member
+                    </div>
+                    <div style="font-size:2rem;font-weight:700;margin:0.5rem 0;">{{ user.loyalty_points|default(0) }} Points</div>
+                    {% if tier_progress < 100 %}
+                    <div style="font-size:0.8rem;opacity:0.8;margin-bottom:0.5rem;">{{ next_threshold - user.loyalty_points|default(0) }} more points to {{ next_tier }}</div>
+                    <div class="progress-bar"><div class="progress-fill" style="width:{{ tier_progress }}%;"></div></div>
+                    {% else %}
+                    <div style="font-size:0.8rem;opacity:0.8;">🎉 Maximum tier achieved!</div>
+                    {% endif %}
+                    <div style="display:flex;justify-content:space-between;margin-top:1rem;font-size:0.8rem;opacity:0.85;">
+                        <span>1000 pts = ₹100 off</span>
+                        <a href="{{ url_for('guest.loyalty') }}" style="color:var(--gold-light);">Details →</a>
+                    </div>
+                </div>
+                
+                <!-- Notifications -->
+                <div class="card">
+                    <div class="card-header"><span>🔔 Notifications</span></div>
+                    <div style="max-height:250px;overflow-y:auto;">
+                        {% for n in notifications[:5] %}
+                        <div style="padding:0.875rem 1.25rem;border-bottom:1px solid rgba(0,0,0,0.05);{% if not n.read_status %}border-left:3px solid var(--primary);{% endif %}">
+                            <div style="font-weight:600;font-size:0.82rem;">{{ n.title }}</div>
+                            <div style="font-size:0.75rem;color:var(--text-light);">{{ n.message[:80] }}...</div>
+                        </div>
+                        {% else %}
+                        <div style="padding:1.5rem;text-align:center;color:var(--text-light);font-size:0.85rem;">No notifications</div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- AI Recommended Rooms -->
+        {% if recommended_rooms %}
+        <div style="margin-top:1.75rem;">
+            <h3 style="margin-bottom:1rem;">🤖 AI Recommended for You</h3>
+            <div class="rooms-grid">
+                {% for room in recommended_rooms %}
+                <div class="room-card">
+                    <div class="room-card-image">
+                        <div class="room-placeholder">{% if room.room_type == 'VIP Suite' %}🌊{% elif room.room_type == 'Couple' %}💑{% else %}🛌{% endif %}</div>
+                        <div class="room-badge">{{ room.room_type }}</div>
+                        <div style="position:absolute;top:1rem;right:1rem;background:rgba(212,175,55,0.9);color:white;padding:0.2rem 0.6rem;border-radius:20px;font-size:0.7rem;font-weight:700;">🤖 {{ room.match_score }}% match</div>
+                    </div>
+                    <div class="room-card-body">
+                        <h3 class="room-name">{{ room.room_type }} — {{ room.room_number }}</h3>
+                        <div style="font-size:0.75rem;color:var(--info);margin-bottom:0.5rem;">💡 {{ room.reason }}</div>
+                        <div class="room-price">
+                            <span class="price-amount">₹{{ "{:,.0f}".format(room.current_price) }}</span>
+                            <span class="price-per">/night</span>
+                        </div>
+                    </div>
+                    <div class="room-card-footer">
+                        <span class="badge badge-primary">AI Pick</span>
+                        <a href="{{ url_for('guest.book_room', room_id=room.room_id) }}" class="btn btn-primary btn-sm">Book Now</a>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+    </main>
+</div>
+{% endblock %}

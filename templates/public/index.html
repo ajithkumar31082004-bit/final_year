@@ -1,0 +1,233 @@
+{% extends "base.html" %}
+{% block title %}Blissful Abodes Chennai — Luxury Hotel | Marina Beach{% endblock %}
+{% block content %}
+
+<!-- HERO SECTION -->
+<section class="hero">
+    <div class="container">
+        <div class="hero-content fade-in">
+            <div class="hero-tag">⭐ Chennai's #1 Luxury Hotel</div>
+            <h1 class="hero-title">
+                Your Dream Stay<br>
+                <span>Awaits at the Marina</span>
+            </h1>
+            <p class="hero-subtitle">Experience unparalleled luxury at 123 Marina Beach Road. 100 premium rooms, AI-powered service, and memories that last a lifetime.</p>
+            
+            <!-- Search Box -->
+            <form action="{{ url_for('guest.room_listing') }}" method="GET" class="search-box">
+                <div class="search-field">
+                    <label>Check-in Date</label>
+                    <input type="date" name="check_in" id="heroCheckIn" min="{{ now.strftime('%Y-%m-%d') }}" placeholder="Select date">
+                </div>
+                <div class="search-field">
+                    <label>Check-out Date</label>
+                    <input type="date" name="check_out" id="heroCheckOut" placeholder="Select date">
+                </div>
+                <div class="search-field">
+                    <label>Room Type</label>
+                    <select name="type">
+                        <option value="">All Types</option>
+                        <option value="Single">Single</option>
+                        <option value="Double">Double</option>
+                        <option value="Family">Family</option>
+                        <option value="Couple">Couple</option>
+                        <option value="VIP Suite">VIP Suite</option>
+                    </select>
+                </div>
+                <div class="search-field">
+                    <label>Guests</label>
+                    <select name="guests">
+                        <option value="1">1 Guest</option>
+                        <option value="2">2 Guests</option>
+                        <option value="3">3 Guests</option>
+                        <option value="4">4+ Guests</option>
+                    </select>
+                </div>
+                <button type="submit" class="btn btn-primary btn-lg">🔍 Search</button>
+            </form>
+        </div>
+    </div>
+</section>
+
+<!-- STATS BAR -->
+<section style="background:white;padding:2rem 0;box-shadow:0 2px 20px rgba(0,0,0,0.05);">
+    <div class="container">
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:2rem;text-align:center;">
+            <div>
+                <div style="font-size:2.5rem;font-weight:800;color:var(--primary);font-family:var(--font-body);">{{ stats.rooms }}+</div>
+                <div style="color:var(--text-light);font-size:0.9rem;margin-top:0.25rem;">Premium Rooms</div>
+            </div>
+            <div>
+                <div style="font-size:2.5rem;font-weight:800;color:var(--primary);font-family:var(--font-body);">{{ stats.bookings }}+</div>
+                <div style="color:var(--text-light);font-size:0.9rem;margin-top:0.25rem;">Happy Bookings</div>
+            </div>
+            <div>
+                <div style="font-size:2.5rem;font-weight:800;color:var(--primary);font-family:var(--font-body);">{{ stats.rating }}/5</div>
+                <div style="color:var(--text-light);font-size:0.9rem;margin-top:0.25rem;">Guest Rating ⭐</div>
+            </div>
+            <div>
+                <div style="font-size:2.5rem;font-weight:800;color:var(--primary);font-family:var(--font-body);">24/7</div>
+                <div style="color:var(--text-light);font-size:0.9rem;margin-top:0.25rem;">AI Concierge</div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- FEATURED ROOMS -->
+<section style="padding:5rem 0;background:var(--bg-cream);">
+    <div class="container">
+        <div class="section-header">
+            <div class="section-tag">🏆 Our Rooms</div>
+            <h2 class="section-title">Curated Luxury Accommodations</h2>
+            <p class="section-subtitle">From cozy singles to opulent VIP Suites, every room is a masterpiece of comfort</p>
+        </div>
+        <div class="rooms-grid">
+            {% for room in featured_rooms %}
+            <div class="room-card slide-up">
+                <div class="room-card-image">
+                    <img src="{{ room.primary_image }}" alt="{{ room.room_type }} room" onerror="this.onerror=null;this.src='{{ room.fallback_image }}';">
+                    <div class="room-badge {% if room.room_type == 'VIP Suite' %}gold{% endif %}">{{ room.room_type }}</div>
+                    {% if room.available_count is defined and room.available_count <= 3 %}
+                    <div style="position:absolute;bottom:1rem;left:1rem;background:rgba(220,53,69,0.9);color:white;padding:0.25rem 0.75rem;border-radius:20px;font-size:0.72rem;font-weight:600;">🔥 Only {{ room.available_count }} left!</div>
+                    {% endif %}
+                </div>
+                <div class="room-card-body">
+                    <h3 class="room-name">{{ room.room_type }} Room — {{ room.room_number }}</h3>
+                    <div class="room-rating">
+                        <span class="stars">★★★★★</span>
+                        <span>Floor {{ room.floor }} • {{ room.view_type or 'City View' }}</span>
+                    </div>
+                    <div class="room-amenities">
+                        {% for amenity in room.amenities[:4] %}
+                        <span class="amenity-tag">{{ amenity }}</span>
+                        {% endfor %}
+                        {% if room.amenities|length > 4 %}<span class="amenity-tag">+{{ room.amenities|length - 4 }} more</span>{% endif %}
+                    </div>
+                    <div class="room-price">
+                        <span class="price-amount">₹{{ "{:,.0f}".format(room.current_price) }}</span>
+                        <span class="price-per">/night</span>
+                        <span class="price-discount" style="margin-left:0.5rem;">+18% GST</span>
+                    </div>
+                </div>
+                <div class="room-card-footer">
+                    <div>
+                        <div class="scarcity-badge">🔥 High demand</div>
+                        <div class="social-proof">👀 {{ [5,8,12,3,7,15]|random }} people viewing</div>
+                    </div>
+                    <a href="{{ url_for('guest.room_detail', room_id=room.room_id) }}" class="btn btn-primary btn-sm">Book Now</a>
+                </div>
+            </div>
+            {% else %}
+            <div style="grid-column:1/-1;text-align:center;padding:3rem;color:var(--text-light);">
+                <div style="font-size:3rem;">🏨</div>
+                <p>Rooms loading... Please run the application to see data.</p>
+            </div>
+            {% endfor %}
+        </div>
+        <div style="text-align:center;margin-top:2.5rem;">
+            <a href="{{ url_for('guest.room_listing') }}" class="btn btn-outline btn-lg">View All 100 Rooms →</a>
+        </div>
+    </div>
+</section>
+
+<!-- FEATURES / WHY CHOOSE US -->
+<section style="padding:5rem 0;background:white;">
+    <div class="container">
+        <div class="section-header">
+            <div class="section-tag">✨ Why Choose Us</div>
+            <h2 class="section-title">The Blissful Experience</h2>
+        </div>
+        <div class="features-grid">
+            <div class="card" style="padding:2rem;text-align:center;border-top:4px solid var(--primary);">
+                <div style="font-size:3rem;margin-bottom:1rem;">🤖</div>
+                <h3 style="font-size:1.1rem;margin-bottom:0.75rem;">AI-Powered Service</h3>
+                <p style="color:var(--text-light);font-size:0.875rem;line-height:1.7;">6 AI models provide personalized recommendations, dynamic pricing, and fraud-free bookings.</p>
+            </div>
+            <div class="card" style="padding:2rem;text-align:center;border-top:4px solid var(--gold);">
+                <div style="font-size:3rem;margin-bottom:1rem;">🏆</div>
+                <h3 style="font-size:1.1rem;margin-bottom:0.75rem;">Blissful Rewards</h3>
+                <p style="color:var(--text-light);font-size:0.875rem;line-height:1.7;">Earn 10 points per ₹100 spent. Silver, Gold & Platinum tiers with exclusive perks.</p>
+            </div>
+            <div class="card" style="padding:2rem;text-align:center;border-top:4px solid var(--success);">
+                <div style="font-size:3rem;margin-bottom:1rem;">📱</div>
+                <h3 style="font-size:1.1rem;margin-bottom:0.75rem;">UPI & Easy Pay</h3>
+                <p style="color:var(--text-light);font-size:0.875rem;line-height:1.7;">Pay via UPI, Cards, Net Banking, Wallets, or EMI. All major Indian payment methods.</p>
+            </div>
+            <div class="card" style="padding:2rem;text-align:center;border-top:4px solid var(--info);">
+                <div style="font-size:3rem;margin-bottom:1rem;">🌊</div>
+                <h3 style="font-size:1.1rem;margin-bottom:0.75rem;">Marina Beach View</h3>
+                <p style="color:var(--text-light);font-size:0.875rem;line-height:1.7;">Wake up to stunning ocean views. Steps away from the famous Marina Beach, Chennai.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- REVIEWS -->
+{% if reviews %}
+<section style="padding:5rem 0;background:var(--bg-cream);">
+    <div class="container">
+        <div class="section-header">
+            <div class="section-tag">💬 Guest Reviews</div>
+            <h2 class="section-title">What Our Guests Say</h2>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.5rem;">
+            {% for review in reviews %}
+            <div class="review-card">
+                <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:0.75rem;">
+                    <div style="width:40px;height:40px;border-radius:50%;background:var(--gradient-primary);display:flex;align-items:center;justify-content:center;color:white;font-weight:700;">{{ review.first_name[0] }}</div>
+                    <div>
+                        <div class="reviewer-name">{{ review.first_name }} {{ review.last_name }}</div>
+                        <div class="review-stars">{{ '★' * review.overall_rating|int }}{{ '☆' * (5 - review.overall_rating|int) }}</div>
+                    </div>
+                </div>
+                <p class="review-text">"{{ review.comment[:150] }}{% if review.comment|length > 150 %}...{% endif %}"</p>
+                <span class="sentiment-badge sentiment-{{ review.sentiment }}">{{ review.sentiment|title }}</span>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</section>
+{% endif %}
+
+<!-- CTA -->
+<section style="background:var(--gradient-primary);padding:5rem 0;text-align:center;">
+    <div class="container">
+        <div style="font-size:3rem;margin-bottom:1rem;">🌟</div>
+        <h2 style="font-size:2.5rem;color:white;font-family:var(--font-heading);margin-bottom:1rem;">Ready for Your Perfect Stay?</h2>
+        <p style="color:rgba(255,255,255,0.85);margin-bottom:2rem;font-size:1.1rem;">Use code <strong>WELCOME10</strong> for 10% off your first booking!</p>
+        <div style="display:flex;gap:1rem;justify-content:center;flex-wrap:wrap;">
+            <a href="{{ url_for('guest.room_listing') }}" class="btn btn-lg" style="background:white;color:var(--primary);font-weight:700;">🛏️ Browse Rooms</a>
+            {% if not current_user %}
+            <a href="{{ url_for('auth.register') }}" class="btn btn-outline-light btn-lg">✨ Join & Save</a>
+            {% endif %}
+        </div>
+    </div>
+</section>
+
+<!-- Map Section -->
+<section style="padding:0;height:350px;position:relative;overflow:hidden;">
+    <div style="width:100%;height:100%;background:var(--gradient-dark);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:1rem;">
+        <div style="font-size:4rem;">📍</div>
+        <h3 style="color:white;">123 Marina Beach Road, Chennai - 600001</h3>
+        <p style="color:rgba(255,255,255,0.7);">Coordinates: 13.0478° N, 80.2838° E</p>
+        <a href="https://maps.google.com/?q=Marina+Beach+Chennai" target="_blank" class="btn btn-primary">Open in Google Maps</a>
+    </div>
+</section>
+
+{% endblock %}
+<script>
+// Set tomorrow as default check-in
+document.addEventListener('DOMContentLoaded', function() {
+    const today = new Date();
+    const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1);
+    const dayAfter = new Date(today); dayAfter.setDate(dayAfter.getDate() + 2);
+    
+    const fmt = d => d.toISOString().split('T')[0];
+    const ci = document.getElementById('heroCheckIn');
+    const co = document.getElementById('heroCheckOut');
+    if (ci) { ci.value = fmt(tomorrow); ci.min = fmt(today); }
+    if (co) { co.value = fmt(dayAfter); co.min = fmt(tomorrow); }
+    if (ci) ci.addEventListener('change', function() { if (co) { const next = new Date(this.value); next.setDate(next.getDate()+1); co.min = this.value; if (co.value <= this.value) co.value = fmt(next); }});
+});
+</script>
+

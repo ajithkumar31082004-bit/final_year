@@ -1,0 +1,133 @@
+﻿{% extends "base.html" %}
+{% block title %}User Management - Admin{% endblock %}
+{% block content %}
+<div class="dashboard-layout">
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <div style="font-size:2rem;">Admin</div>
+      <div class="sidebar-user-name">{{ current_user.first_name }} {{ current_user.last_name }}</div>
+      <div class="sidebar-user-role">Administrator</div>
+    </div>
+    <ul class="sidebar-nav">
+      <li><a href="{{ url_for('admin.dashboard') }}" class="nav-link"><span class="icon"><i class="fa-solid fa-chart-line"></i></span> Dashboard</a></li>
+      <li><a href="{{ url_for('admin.bookings') }}" class="nav-link"><span class="icon"><i class="fa-solid fa-receipt"></i></span> Bookings</a></li>
+      <li><a href="{{ url_for('admin.user_management') }}" class="nav-link active"><span class="icon"><i class="fa-solid fa-users"></i></span> Users</a></li>
+      <li><a href="{{ url_for('admin.room_management') }}" class="nav-link"><span class="icon"><i class="fa-solid fa-bed"></i></span> Rooms</a></li>
+      <li><a href="{{ url_for('admin.analytics') }}" class="nav-link"><span class="icon"><i class="fa-solid fa-chart-column"></i></span> Analytics</a></li>
+      <li><a href="{{ url_for('admin.review_management') }}" class="nav-link"><span class="icon"><i class="fa-solid fa-star"></i></span> Reviews</a></li>
+      <div class="sidebar-section-title">SYSTEM</div>
+      <li><a href="{{ url_for('auth.logout') }}" class="nav-link"><span class="icon"><i class="fa-solid fa-right-from-bracket"></i></span> Logout</a></li>
+    </ul>
+  </aside>
+
+  <main class="main-content">
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">User Management</h1>
+        <div class="page-subtitle">Create and manage staff, managers, and guests</div>
+      </div>
+      <button class="btn btn-primary" onclick="document.getElementById('userModal').classList.add('show')">+ New User</button>
+    </div>
+
+    <div class="card">
+      <div class="table-container">
+        <table class="data-table">
+          <thead><tr><th>Name</th><th>Email</th><th>Phone</th><th>Role</th><th>Department</th><th>Shift</th><th>Status</th><th>Actions</th></tr></thead>
+          <tbody>
+            {% for u in users %}
+            <tr>
+              <td>{{ u.first_name }} {{ u.last_name }}</td>
+              <td>{{ u.email }}</td>
+              <td><input id="phone_{{ u.user_id }}" class="form-control" style="width:120px;" value="{{ u.phone or '' }}"></td>
+              <td>
+                <select id="role_{{ u.user_id }}" class="form-control" style="width:auto;">
+                  <option value="guest" {% if u.role == 'guest' %}selected{% endif %}>Guest</option>
+                  <option value="staff" {% if u.role == 'staff' %}selected{% endif %}>Staff</option>
+                  <option value="manager" {% if u.role == 'manager' %}selected{% endif %}>Manager</option>
+                  {% if current_user.role in ['admin', 'superadmin'] %}
+                  <option value="admin" {% if u.role == 'admin' %}selected{% endif %}>Admin</option>
+                  {% endif %}
+                  {% if current_user.role == 'superadmin' %}
+                  <option value="superadmin" {% if u.role == 'superadmin' %}selected{% endif %}>Superadmin</option>
+                  {% endif %}
+                </select>
+              </td>
+              <td><input id="dept_{{ u.user_id }}" class="form-control" style="width:140px;" value="{{ u.department or '' }}"></td>
+              <td><input id="shift_{{ u.user_id }}" class="form-control" style="width:120px;" value="{{ u.shift or '' }}"></td>
+              <td><span class="badge badge-{{ 'success' if u.is_active else 'danger' }}">{{ 'Active' if u.is_active else 'Inactive' }}</span></td>
+              <td>
+                <button class="btn btn-sm btn-primary" onclick="updateUser('{{ u.user_id }}')">Save</button>
+                <button class="btn btn-sm btn-outline" onclick="toggleUser('{{ u.user_id }}')">{{ 'Disable' if u.is_active else 'Enable' }}</button>
+                <button class="btn btn-sm btn-danger" onclick="deleteUser('{{ u.user_id }}')">Delete</button>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div class="modal-overlay" id="userModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 class="modal-title">Create User</h3>
+      <button class="modal-close" onclick="document.getElementById('userModal').classList.remove('show')">&times;</button>
+    </div>
+    <form method="POST" action="{{ url_for('admin.create_user') }}">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+        <div class="form-group"><label class="form-label">First Name</label><input name="first_name" class="form-control" required></div>
+        <div class="form-group"><label class="form-label">Last Name</label><input name="last_name" class="form-control" required></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+        <div class="form-group"><label class="form-label">Email</label><input type="email" name="email" class="form-control" required></div>
+        <div class="form-group"><label class="form-label">Phone</label><input name="phone" class="form-control"></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+        <div class="form-group"><label class="form-label">Role</label>
+          <select name="role" class="form-control">
+            <option value="staff">Staff</option>
+            <option value="manager">Manager</option>
+            <option value="guest">Guest</option>
+          </select>
+        </div>
+        <div class="form-group"><label class="form-label">Department</label><input name="department" class="form-control"></div>
+      </div>
+      <div class="form-group"><label class="form-label">Shift</label><input name="shift" class="form-control" placeholder="morning/afternoon/night"></div>
+      <div class="form-group"><label class="form-label">Password</label><input type="password" name="password" class="form-control" value="DefaultPass123!"></div>
+      <button type="submit" class="btn btn-primary btn-block">Create User</button>
+    </form>
+  </div>
+</div>
+
+<script>
+function toggleUser(userId){
+  fetch(`/admin/users/${userId}/toggle`, {method:'POST'}).then(() => location.reload());
+}
+function deleteUser(userId){
+  if (!confirm('Delete this user? This will deactivate the account.')) return;
+  fetch(`/admin/users/${userId}/delete`, {method:'POST'})
+    .then(r => r.json())
+    .then(data => {
+      if (data && data.message) showToast(data.message, data.success ? 'success' : 'danger');
+      location.reload();
+    });
+}
+function updateUser(userId){
+  const payload = {
+    role: document.getElementById(`role_${userId}`).value,
+    department: document.getElementById(`dept_${userId}`).value,
+    shift: document.getElementById(`shift_${userId}`).value,
+    phone: document.getElementById(`phone_${userId}`).value
+  };
+  fetch(`/admin/users/${userId}/update`, {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify(payload)
+  }).then(r => r.json()).then(d => {
+    if (d.success) showToast('User updated');
+  });
+}
+</script>
+{% endblock %}

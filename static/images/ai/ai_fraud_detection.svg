@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="700" viewBox="0 0 1200 700">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#F5F1E8"/>
+      <stop offset="100%" stop-color="#FFE2D4"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="700" fill="url(#bg)"/>
+  <text x="60" y="70" font-size="40" font-family="Arial, sans-serif" fill="#1A1A2E">Fraud Detection Engine</text>
+  <text x="60" y="110" font-size="20" font-family="Arial, sans-serif" fill="#4A4A6A">Rule-based ensemble risk scoring</text>
+
+  <rect x="60" y="160" width="340" height="360" rx="16" fill="#FFFFFF" stroke="#FF6B35" stroke-width="2"/>
+  <text x="90" y="205" font-size="20" font-family="Arial, sans-serif" fill="#1A1A2E">Rules</text>
+  <text x="90" y="245" font-size="18" font-family="Arial, sans-serif" fill="#4A4A6A">1. Rapid multi-booking (+25)</text>
+  <text x="90" y="280" font-size="18" font-family="Arial, sans-serif" fill="#4A4A6A">2. Repeat cancellations (+20)</text>
+  <text x="90" y="315" font-size="18" font-family="Arial, sans-serif" fill="#4A4A6A">3. New acct luxury (+18)</text>
+  <text x="90" y="350" font-size="18" font-family="Arial, sans-serif" fill="#4A4A6A">4. Capacity mismatch (+15)</text>
+  <text x="90" y="385" font-size="18" font-family="Arial, sans-serif" fill="#4A4A6A">5. Same-day, no history (+10)</text>
+  <text x="90" y="430" font-size="16" font-family="Arial, sans-serif" fill="#4A4A6A">Deterministic jitter: +/-5</text>
+
+  <rect x="460" y="230" width="280" height="140" rx="16" fill="#FFFFFF" stroke="#D4AF37" stroke-width="2"/>
+  <text x="490" y="270" font-size="20" font-family="Arial, sans-serif" fill="#1A1A2E">Total Risk Score</text>
+  <text x="490" y="305" font-size="18" font-family="Arial, sans-serif" fill="#4A4A6A">0-34 SAFE</text>
+  <text x="490" y="335" font-size="18" font-family="Arial, sans-serif" fill="#4A4A6A">35-59 REVIEW</text>
+  <text x="490" y="365" font-size="18" font-family="Arial, sans-serif" fill="#4A4A6A">60+ FRAUD (block)</text>
+
+  <rect x="820" y="200" width="320" height="200" rx="16" fill="#FFFFFF" stroke="#28A745" stroke-width="2"/>
+  <text x="850" y="245" font-size="20" font-family="Arial, sans-serif" fill="#1A1A2E">Admin Actions</text>
+  <text x="850" y="280" font-size="18" font-family="Arial, sans-serif" fill="#4A4A6A">Auto-block high risk</text>
+  <text x="850" y="310" font-size="18" font-family="Arial, sans-serif" fill="#4A4A6A">Flag for review</text>
+  <text x="850" y="340" font-size="18" font-family="Arial, sans-serif" fill="#4A4A6A">Audit log entry</text>
+
+  <line x1="400" y1="320" x2="460" y2="300" stroke="#1A1A2E" stroke-width="2"/>
+  <line x1="740" y1="300" x2="820" y2="280" stroke="#1A1A2E" stroke-width="2"/>
+</svg>

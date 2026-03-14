@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}Contact Us — Blissful Abodes{% endblock %}
+{% block content %}
+<div style="background:var(--gradient-dark);padding:3rem 0;text-align:center;">
+    <h1 style="color:white;font-family:var(--font-heading);">📞 Contact Us</h1>
+    <p style="color:rgba(255,255,255,0.7);">We're here for you 24/7</p>
+</div>
+<section style="padding:4rem 0;background:var(--bg-cream);">
+    <div class="container">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:3rem;max-width:900px;margin:0 auto;">
+            <div>
+                <h2 style="font-family:var(--font-heading);margin-bottom:1.5rem;">Get In Touch</h2>
+                <div style="display:flex;flex-direction:column;gap:1.25rem;">
+                    <div style="display:flex;gap:1rem;align-items:start;">
+                        <div style="width:48px;height:48px;background:rgba(255,107,53,0.12);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:1.5rem;flex-shrink:0;">📍</div>
+                        <div><div style="font-weight:600;margin-bottom:0.2rem;">Address</div><div style="color:var(--text-medium);font-size:0.9rem;">123 Marina Beach Road<br>Chennai - 600001, Tamil Nadu, India</div></div>
+                    </div>
+                    <div style="display:flex;gap:1rem;align-items:center;">
+                        <div style="width:48px;height:48px;background:rgba(40,167,69,0.12);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:1.5rem;flex-shrink:0;">📞</div>
+                        <div><div style="font-weight:600;margin-bottom:0.2rem;">Phone</div><div style="color:var(--text-medium);font-size:0.9rem;">+91 44 2345 6789<br>+91 98765 43210 (WhatsApp)</div></div>
+                    </div>
+                    <div style="display:flex;gap:1rem;align-items:center;">
+                        <div style="width:48px;height:48px;background:rgba(23,162,184,0.12);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:1.5rem;flex-shrink:0;">📧</div>
+                        <div><div style="font-weight:600;margin-bottom:0.2rem;">Email</div><div style="color:var(--text-medium);font-size:0.9rem;">info@blissfulabodes.com<br>reservations@blissfulabodes.com</div></div>
+                    </div>
+                    <div style="display:flex;gap:1rem;align-items:center;">
+                        <div style="width:48px;height:48px;background:rgba(212,175,55,0.12);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:1.5rem;flex-shrink:0;">🕐</div>
+                        <div><div style="font-weight:600;margin-bottom:0.2rem;">Hours</div><div style="color:var(--text-medium);font-size:0.9rem;">Front Desk: 24/7<br>Check-in: 2 PM | Check-out: 12 PM</div></div>
+                    </div>
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-header-gradient"><span>✉️ Send Us a Message</span></div>
+                <div class="card-body">
+                    <form>
+                        <div class="form-group"><label class="form-label">Your Name</label><input type="text" class="form-control" placeholder="Rajesh Kumar" required></div>
+                        <div class="form-group"><label class="form-label">Email</label><input type="email" class="form-control" placeholder="rajesh@email.com" required></div>
+                        <div class="form-group"><label class="form-label">Subject</label><select class="form-control"><option>Booking Inquiry</option><option>Complaint/Feedback</option><option>General Query</option><option>Group Booking</option></select></div>
+                        <div class="form-group"><label class="form-label">Message</label><textarea class="form-control" rows="4" placeholder="Your message..." required></textarea></div>
+                        <button type="submit" class="btn btn-primary btn-block" onclick="event.preventDefault(); showToast('✅ Message sent! We\'ll reply within 24 hours.')">Send Message</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+        <div style="margin-top:2.5rem;">
+            <div class="card">
+                <div class="card-header"><span>Hotel Location</span></div>
+                <div class="card-body">
+                    {% if google_maps_api_key %}
+                    <div id="map" style="height:400px;border-radius:14px;"></div>
+                    {% else %}
+                    <div style="padding:1.5rem;text-align:center;color:var(--text-light);">
+                        Google Maps API key not configured.
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+{% if google_maps_api_key %}
+<script>
+function initMap() {
+    const hotel = { lat: 13.0478, lng: 80.2838 };
+    const map = new google.maps.Map(document.getElementById('map'), {
+        zoom: 15, center: hotel
+    });
+    new google.maps.Marker({ position: hotel, map: map, title: 'Blissful Abodes Chennai' });
+}
+</script>
+<script src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key }}&callback=initMap" async defer></script>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,90 @@
+﻿{% extends "base.html" %}
+{% block title %}Complete Payment - Blissful Abodes{% endblock %}
+{% block content %}
+<div style="background:var(--gradient-dark);padding:3rem 0;text-align:center;">
+  <h1 style="color:white;font-family:var(--font-heading);">Complete Payment</h1>
+  <p style="color:rgba(255,255,255,0.7);">Booking ID: {{ booking.booking_id }}</p>
+</div>
+<section style="padding:3rem 0;background:var(--bg-cream);">
+  <div class="container-sm">
+    <div class="card">
+      <div class="card-header"><span>Payment Summary</span></div>
+      <div class="card-body">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+          <div><strong>Check-in:</strong> {{ booking.check_in }}</div>
+          <div><strong>Check-out:</strong> {{ booking.check_out }}</div>
+          <div><strong>Guests:</strong> {{ booking.num_guests }}</div>
+          <div><strong>Amount:</strong> INR {{ "{:,.0f}".format(booking.total_amount) }}</div>
+        </div>
+        <div style="margin-top:1.5rem;">
+          {% if demo_mode %}
+          <button class="btn btn-primary btn-block" id="payBtn">Simulate Payment</button>
+          <div style="margin-top:0.75rem;color:var(--text-light);font-size:0.85rem;">Demo mode enabled. Payment will be simulated.</div>
+          {% else %}
+          <button class="btn btn-primary btn-block" id="payBtn">Pay with Razorpay</button>
+          <div style="margin-top:0.75rem;color:var(--text-light);font-size:0.85rem;">Secure payment via Razorpay.</div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+{% if not demo_mode %}
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+{% endif %}
+<script>
+const bookingId = '{{ booking.booking_id }}';
+const orderId = '{{ order_id }}';
+const amountPaise = {{ amount_paise }};
+const keyId = '{{ razorpay_key_id }}';
+
+function verifyPayment(payload){
+  fetch('/api/payment/verify', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify(payload)
+  }).then(r => r.json()).then(d => {
+    if (d.success) {
+      showToast('Payment successful');
+      setTimeout(() => window.location = `/guest/booking/${bookingId}`, 700);
+    } else {
+      showToast(d.message || 'Payment failed');
+    }
+  });
+}
+
+const btn = document.getElementById('payBtn');
+btn?.addEventListener('click', function(e){
+  e.preventDefault();
+  const demo = {{ 'true' if demo_mode else 'false' }};
+  if (demo) {
+    verifyPayment({
+      booking_id: bookingId,
+      razorpay_order_id: orderId,
+      razorpay_payment_id: 'demo_pay_' + bookingId,
+      razorpay_signature: 'demo_signature'
+    });
+    return;
+  }
+  const options = {
+    key: keyId,
+    amount: amountPaise,
+    currency: 'INR',
+    name: 'Blissful Abodes Chennai',
+    description: `Booking ${bookingId}`,
+    order_id: orderId,
+    handler: function (response){
+      verifyPayment({
+        booking_id: bookingId,
+        razorpay_order_id: response.razorpay_order_id,
+        razorpay_payment_id: response.razorpay_payment_id,
+        razorpay_signature: response.razorpay_signature
+      });
+    }
+  };
+  const rzp = new Razorpay(options);
+  rzp.open();
+});
+</script>
+{% endblock %}

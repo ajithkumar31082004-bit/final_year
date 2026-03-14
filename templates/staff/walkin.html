@@ -1,0 +1,61 @@
+﻿{% extends "base.html" %}
+{% block title %}Walk-in Booking - Staff{% endblock %}
+{% block content %}
+<div class="dashboard-layout">
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <div style="font-size:2rem;">Staff</div>
+      <div class="sidebar-user-name">{{ current_user.first_name }} {{ current_user.last_name }}</div>
+      <div class="sidebar-user-role">{{ current_user.department or 'Staff' }}</div>
+    </div>
+    <ul class="sidebar-nav">
+      <li><a href="{{ url_for('staff.dashboard') }}" class="nav-link"><span class="icon"><i class="fa-solid fa-chart-line"></i></span> Dashboard</a></li>
+      <li><a href="{{ url_for('staff.walkin_booking') }}" class="nav-link active"><span class="icon"><i class="fa-solid fa-person-walking"></i></span> Walk-in Booking</a></li>
+      <div class="sidebar-section-title">SYSTEM</div>
+      <li><a href="{{ url_for('auth.logout') }}" class="nav-link"><span class="icon"><i class="fa-solid fa-right-from-bracket"></i></span> Clock Out</a></li>
+    </ul>
+  </aside>
+
+  <main class="main-content">
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">Walk-in Booking</h1>
+        <div class="page-subtitle">Create a booking for a walk-in guest</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><span>Guest Details</span></div>
+      <div class="card-body">
+        <form method="POST">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+            <div class="form-group"><label class="form-label">Guest Name</label><input name="guest_name" class="form-control" required></div>
+            <div class="form-group"><label class="form-label">Phone</label><input name="phone" class="form-control" required></div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+            <div class="form-group"><label class="form-label">Room</label>
+              <select name="room_id" class="form-control" required>
+                {% for r in rooms %}
+                <option value="{{ r.room_id }}">{{ r.room_number }} - {{ r.room_type }} (INR {{ "{:,.0f}".format(r.current_price) }})</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="form-group"><label class="form-label">Payment Method</label>
+              <select name="payment_method" class="form-control">
+                <option value="cash">Cash</option>
+                <option value="card">Card</option>
+                <option value="upi">UPI</option>
+              </select>
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+            <div class="form-group"><label class="form-label">Check-in</label><input type="date" name="check_in" class="form-control" required></div>
+            <div class="form-group"><label class="form-label">Check-out</label><input type="date" name="check_out" class="form-control" required></div>
+          </div>
+          <button class="btn btn-primary btn-block">Create Booking</button>
+        </form>
+      </div>
+    </div>
+  </main>
+</div>
+{% endblock %}

@@ -1,0 +1,371 @@
+{% extends "base.html" %}
+{% block title %}Staff Dashboard — Blissful Abodes{% endblock %}
+{% block content %}
+<div class="dashboard-layout">
+    <aside class="sidebar">
+        <div class="sidebar-header">
+            <div style="font-size:2rem;margin-bottom:0.5rem;">👤</div>
+            <div class="sidebar-user-name">{{ user.first_name }} {{ user.last_name }}</div>
+            <div class="sidebar-user-role">{{ user.department or 'Staff' }}</div>
+            <div style="color:rgba(255,255,255,0.6);font-size:0.75rem;margin-top:0.3rem;">🕐 Shift: {{ user.shift|title if user.shift else 'Morning' }}</div>
+        </div>
+        <ul class="sidebar-nav">
+            <li><a href="{{ url_for('staff.dashboard') }}" class="nav-link active"><span class="icon">📊</span> Dashboard</a></li>
+            <li><a href="{{ url_for('staff.walkin_booking') }}" class="nav-link"><span class="icon">🚶</span> Walk-in Booking</a></li>
+            <div class="sidebar-section-title">QUICK ACTIONS</div>
+            <li><a href="{{ url_for('auth.logout') }}" class="nav-link"><span class="icon">🚪</span> Clock Out</a></li>
+        </ul>
+    </aside>
+    
+    <main class="main-content">
+        <div class="page-header">
+            <div>
+                <h1 class="page-title">Staff Dashboard</h1>
+                <div class="page-subtitle" id="liveClock"></div>
+            </div>
+            <a href="{{ url_for('staff.walkin_booking') }}" class="btn btn-primary">🚶 Walk-in Booking</a>
+        </div>
+        
+        <!-- Stats -->
+        <div class="stats-grid" style="margin-bottom:1.75rem;">
+            <div class="stat-card success">
+                <div class="stat-icon success">🏃</div>
+                <div><div class="stat-value" id="statCheckins">{{ stats.checkins_today }}</div><div class="stat-label">Check-ins Today</div></div>
+            </div>
+            <div class="stat-card danger">
+                <div class="stat-icon danger">🚪</div>
+                <div><div class="stat-value">{{ stats.checkouts_today }}</div><div class="stat-label">Check-outs Today</div></div>
+            </div>
+            <div class="stat-card orange">
+                <div class="stat-icon orange">🔴</div>
+                <div><div class="stat-value" id="statOccupied">{{ stats.occupied }}</div><div class="stat-label">Occupied Rooms</div></div>
+            </div>
+            <div class="stat-card info">
+                <div class="stat-icon info">🟢</div>
+                <div><div class="stat-value" id="statAvailable">{{ stats.available }}</div><div class="stat-label">Available Rooms</div></div>
+            </div>
+        </div>
+        
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin-bottom:1.75rem;">
+            <!-- Check-in Queue -->
+            <div class="card">
+                <div class="card-header" style="background:rgba(40,167,69,0.08);"><span>✅ Today's Check-ins ({{ checkin_list|length }})</span></div>
+                <div style="max-height:320px;overflow-y:auto;">
+                    {% if checkin_list %}
+                    <table class="data-table">
+                        <thead><tr><th>Room</th><th>Guest</th><th>Phone</th><th>Action</th></tr></thead>
+                        <tbody>
+                        {% for b in checkin_list %}
+                        <tr>
+                            <td><strong>{{ b.room_number }}</strong><br><small style="color:var(--text-light);">{{ b.room_type }}</small></td>
+                            <td>{{ b.first_name }} {{ b.last_name }}</td>
+                            <td style="font-size:0.8rem;">{{ b.phone }}</td>
+                            <td><button class="btn btn-success btn-sm" onclick="processCheckin('{{ b.booking_id }}')">Check In</button></td>
+                        </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                    {% else %}
+                    <div style="padding:2rem;text-align:center;color:var(--text-light);">No check-ins today</div>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <!-- Check-out Queue -->
+            <div class="card">
+                <div class="card-header" style="background:rgba(220,53,69,0.08);"><span>🚪 Today's Check-outs ({{ checkout_list|length }})</span></div>
+                <div style="max-height:320px;overflow-y:auto;">
+                    {% if checkout_list %}
+                    <table class="data-table">
+                        <thead><tr><th>Room</th><th>Guest</th><th>Total</th><th>Action</th></tr></thead>
+                        <tbody>
+                        {% for b in checkout_list %}
+                        <tr>
+                            <td><strong>{{ b.room_number }}</strong></td>
+                            <td>{{ b.first_name }}</td>
+                            <td>₹{{ "{:,.0f}".format(b.total_amount) }}</td>
+                            <td><button class="btn btn-danger btn-sm" onclick="processCheckout('{{ b.booking_id }}')">Check Out</button></td>
+                        </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                    {% else %}
+                    <div style="padding:2rem;text-align:center;color:var(--text-light);">No check-outs today</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
+        <!-- Room Status Grid -->
+        <div class="card" style="margin-bottom:1.75rem;">
+            <div class="card-header">
+                <span>🗺️ Live Room Status Grid — 100 Rooms</span>
+                <div style="display:flex;gap:0.75rem;font-size:0.75rem;flex-wrap:wrap;">
+                    <span style="color:var(--success);">🟢 Available ({{ stats.available }})</span>
+                    <span style="color:var(--danger);">🔴 Occupied ({{ stats.occupied }})</span>
+                    <span style="color:#856404">🟡 Cleaning ({{ stats.cleaning }})</span>
+                    <span style="color:var(--info);">🔵 Maintenance ({{ stats.maintenance }})</span>
+                    <span style="color:#8a6d3b">🟤 Reserved ({{ stats.reserved }})</span>
+                </div>
+            </div>
+            <div class="card-body">
+                {% for floor, rooms in rooms_by_floor.items() %}
+                <div class="floor-label">Floor {{ floor }}</div>
+                <div class="room-grid-container" style="margin-bottom:1rem;">
+                    {% for room in rooms %}
+                    <div class="room-cell {{ room.status }}" data-room="{{ room.room_number }}"
+                         onclick="openRoomModal('{{ room.room_number }}', '{{ room.status }}', '{{ room.room_type }}')"
+                         title="{{ room.room_number }} — {{ room.room_type }} — {{ room.status|title }}">
+                        <div style="font-size:0.7rem;font-weight:700;">{{ room.room_number }}</div>
+                        <div style="font-size:0.6rem;opacity:0.75;">{{ room.status[:4]|title }}</div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        
+        <!-- Housekeeping Tasks -->
+        <div class="card">
+            <div class="card-header">
+                <span>🧹 Housekeeping Tasks ({{ tasks|length }} pending)</span>
+                <button class="btn btn-sm btn-primary" onclick="document.getElementById('newTaskModal').classList.add('show')">+ New Task</button>
+            </div>
+            {% if tasks %}
+            <div class="table-container">
+            <table class="data-table">
+                <thead><tr><th>Room</th><th>Type</th><th>Priority</th><th>Assigned To</th><th>Status</th><th>Actions</th></tr></thead>
+                <tbody>
+                {% for task in tasks %}
+                <tr>
+                    <td><strong>{{ task.room_number }}</strong></td>
+                    <td>{{ task.task_type|title }}</td>
+                    <td><span class="badge badge-{{ 'danger' if task.priority == 'urgent' else 'warning' if task.priority == 'high' else 'info' }}">{{ task.priority|title }}</span></td>
+                    <td>{{ task.staff_name or 'Unassigned' }}</td>
+                    <td><span class="badge badge-{{ 'success' if task.status == 'completed' else 'warning' if task.status == 'in_progress' else 'info' }}">{{ task.status|title }}</span></td>
+                    <td>
+                        <button class="btn btn-sm btn-success" onclick="updateTask('{{ task.task_id }}','completed')">✅ Done</button>
+                        <button class="btn btn-sm btn-warning" onclick="updateTask('{{ task.task_id }}','in_progress')">▶️ Start</button>
+                    </td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            </div>
+            {% else %}
+            <div style="padding:2rem;text-align:center;color:var(--text-light);">No pending tasks</div>
+            {% endif %}
+        </div>
+
+        <!-- Guest Service Requests -->
+        <div class="card" style="margin-top:1.75rem;">
+            <div class="card-header">
+                <span>🧾 Guest Service Requests ({{ service_requests|length }} open)</span>
+            </div>
+            {% if service_requests %}
+            <div class="table-container">
+            <table class="data-table">
+                <thead><tr><th>Type</th><th>Room</th><th>Details</th><th>Status</th><th>Actions</th></tr></thead>
+                <tbody>
+                {% for req in service_requests %}
+                <tr>
+                    <td>{{ req.request_type|replace('_',' ')|title }}</td>
+                    <td>{{ req.room_number or '-' }}</td>
+                    <td style="max-width:320px;">{{ req.details }}</td>
+                    <td><span class="badge badge-{{ 'success' if req.status == 'completed' else 'warning' if req.status == 'in_progress' else 'info' }}">{{ req.status|title }}</span></td>
+                    <td>
+                        <button class="btn btn-sm btn-warning" onclick="updateServiceRequest('{{ req.request_id }}','in_progress')">Start</button>
+                        <button class="btn btn-sm btn-success" onclick="updateServiceRequest('{{ req.request_id }}','completed')">Done</button>
+                    </td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            </div>
+            {% else %}
+            <div style="padding:2rem;text-align:center;color:var(--text-light);">No open requests</div>
+            {% endif %}
+        </div>
+    </main>
+</div>
+
+<!-- Staff Chatbot -->
+<button class="chatbot-toggle" onclick="toggleStaffChatbot()" title="Staff Assistant">
+    💬
+</button>
+<div class="chatbot-window" id="staffChatbotWindow">
+    <div class="chatbot-header">
+        <div class="chatbot-avatar">🧑‍💼</div>
+        <div>
+            <div class="chatbot-title">Staff Assistant</div>
+            <div class="chatbot-status">🟢 Online • Task & Shift Help</div>
+        </div>
+        <button onclick="toggleStaffChatbot()" style="background:none;border:none;color:rgba(255,255,255,0.7);font-size:1.25rem;cursor:pointer;margin-left:auto;">&times;</button>
+    </div>
+    <div class="chatbot-messages" id="staffChatMessages">
+        <div class="chat-message bot">
+            <div class="message-bubble">
+                Hi {{ user.first_name }}, I can help with your tasks, shift, and procedures. What do you need?
+            </div>
+        </div>
+        <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:0.5rem;">
+            <button class="btn btn-sm btn-outline" onclick="sendStaffQuickMsg('Show my tasks')">🧹 My tasks</button>
+            <button class="btn btn-sm btn-outline" onclick="sendStaffQuickMsg('What is my shift today?')">🕒 My shift</button>
+            <button class="btn btn-sm btn-outline" onclick="sendStaffQuickMsg('How do I update room status?')">🗝️ Room status</button>
+        </div>
+    </div>
+    <div class="chatbot-input">
+        <input type="text" id="staffChatInput" placeholder="Ask about tasks or shift..." onkeypress="if (event.key === 'Enter') sendStaffChat();" />
+        <button class="btn btn-primary btn-sm" onclick="sendStaffChat()">Send</button>
+    </div>
+</div>
+
+<!-- Room Status Modal -->
+<div class="modal-overlay" id="roomModal">
+    <div class="modal">
+        <div class="modal-header">
+            <h3 class="modal-title" id="modalRoomTitle">Update Room Status</h3>
+            <button class="modal-close" onclick="document.getElementById('roomModal').classList.remove('show')">&times;</button>
+        </div>
+        <p style="color:var(--text-light);margin-bottom:1rem;" id="modalRoomInfo"></p>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;">
+            <button class="btn btn-success" onclick="updateRoomStatus('available')">🟢 Available</button>
+            <button class="btn btn-danger" onclick="updateRoomStatus('occupied')">🔴 Occupied</button>
+            <button class="btn btn-warning" onclick="updateRoomStatus('cleaning')">🟡 Cleaning</button>
+            <button class="btn" style="background:#17a2b8;color:white;" onclick="updateRoomStatus('maintenance')">🔵 Maintenance</button>
+            <button class="btn" style="background:#8a6d3b;color:white;" onclick="updateRoomStatus('reserved')">🟤 Reserved</button>
+        </div>
+    </div>
+</div>
+
+<script>
+let selectedRoom = null;
+
+function openRoomModal(roomNum, status, type) {
+    selectedRoom = roomNum;
+    document.getElementById('modalRoomTitle').textContent = `Room ${roomNum}`;
+    document.getElementById('modalRoomInfo').textContent = `${type} | Current: ${status}`;
+    document.getElementById('roomModal').classList.add('show');
+}
+
+function updateRoomStatus(status) {
+    if (!selectedRoom) return;
+    fetch('/api/room/update-status', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({room_number: selectedRoom, status: status})
+    }).then(r => r.json()).then(data => {
+        if (data.success) {
+            const cell = document.querySelector(`.room-cell[data-room="${selectedRoom}"]`);
+            if (cell) cell.className = `room-cell ${status}`;
+            document.getElementById('roomModal').classList.remove('show');
+            showToast(`Room ${selectedRoom} updated to ${status}`);
+        }
+    });
+}
+
+function processCheckin(bookingId) {
+    if (!confirm('Process check-in for this booking?')) return;
+    fetch(`/api/checkin/${bookingId}`, {method:'POST'}).then(r => r.json()).then(d => {
+        if (d.success) { showToast('✅ Check-in processed!'); location.reload(); }
+    });
+}
+
+function processCheckout(bookingId) {
+    if (!confirm('Process check-out?')) return;
+    fetch(`/api/checkout/${bookingId}`, {method:'POST'}).then(r => r.json()).then(d => {
+        if (d.success) { showToast('🚪 Check-out processed! Room marked for cleaning.'); location.reload(); }
+    });
+}
+
+function updateTask(taskId, status) {
+    fetch(`/api/housekeeping/task/${taskId}/status`, {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({status: status})
+    }).then(() => location.reload());
+}
+
+function updateServiceRequest(requestId, status) {
+    fetch(`/api/service-request/${requestId}/status`, {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({status: status})
+    }).then(() => location.reload());
+}
+
+// Live clock
+function updateClock() {
+    const now = new Date();
+    document.getElementById('liveClock').textContent = now.toLocaleString('en-IN', {dateStyle:'full', timeStyle:'medium'});
+}
+setInterval(updateClock, 1000); updateClock();
+
+// Poll room availability
+setInterval(() => {
+    fetch('/api/rooms/availability').then(r => r.json()).then(rooms => {
+        rooms.forEach(room => {
+            const cell = document.querySelector(`.room-cell[data-room="${room.room_number}"]`);
+            if (cell) cell.className = `room-cell ${room.status}`;
+        });
+    });
+}, 30000);
+
+// Staff chatbot
+function toggleStaffChatbot() {
+    const win = document.getElementById('staffChatbotWindow');
+    win?.classList.toggle('show');
+}
+
+function sendStaffQuickMsg(msg) {
+    sendStaffChatMessage(msg);
+}
+
+function sendStaffChat() {
+    const input = document.getElementById('staffChatInput');
+    if (!input?.value.trim()) return;
+    const msg = input.value.trim();
+    input.value = '';
+    sendStaffChatMessage(msg);
+}
+
+async function sendStaffChatMessage(msg) {
+    addStaffUserMessage(msg);
+    const placeholderId = addStaffBotMessage('Typing...');
+    try {
+        const res = await fetch('/api/staff/chatbot/message', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: msg })
+        });
+        const data = await res.json();
+        updateStaffBotMessage(placeholderId, data.reply || 'No response.');
+    } catch (e) {
+        updateStaffBotMessage(placeholderId, 'Network error. Please try again.');
+    }
+}
+
+function addStaffUserMessage(text) {
+    const container = document.getElementById('staffChatMessages');
+    container.innerHTML += `<div class="chat-message user"><div class="message-bubble"></div></div>`;
+    const bubble = container.lastElementChild?.querySelector('.message-bubble');
+    if (bubble) bubble.textContent = text;
+    container.scrollTop = container.scrollHeight;
+}
+
+function addStaffBotMessage(text) {
+    const container = document.getElementById('staffChatMessages');
+    const id = `staff_bot_${Date.now()}_${Math.floor(Math.random()*1000)}`;
+    container.innerHTML += `<div class="chat-message bot"><div class="message-bubble" id="${id}"></div></div>`;
+    const bubble = document.getElementById(id);
+    if (bubble) bubble.innerHTML = text;
+    container.scrollTop = container.scrollHeight;
+    return id;
+}
+
+function updateStaffBotMessage(id, text) {
+    const bubble = document.getElementById(id);
+    if (bubble) bubble.innerHTML = text;
+    const container = document.getElementById('staffChatMessages');
+    container.scrollTop = container.scrollHeight;
+}
+</script>
+{% endblock %}

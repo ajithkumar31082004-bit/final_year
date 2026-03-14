@@ -1,0 +1,222 @@
+{% extends 'base.html' %}
+{% block title %}Agent - Blissful Abodes{% endblock %}
+
+{% block extra_style %}
+.agent-container {
+  max-width: 960px;
+  margin: 2rem auto;
+  padding: 0 1rem;
+}
+.agent-card {
+  background: #ffffff;
+  border-radius: 16px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+}
+.agent-header {
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  font-weight: 600;
+}
+.agent-status {
+  padding: 0.75rem 1.25rem;
+}
+.agent-log {
+  padding: 1rem 1.25rem;
+  max-height: 60vh;
+  overflow-y: auto;
+  background: #f7f8fb;
+}
+.agent-row {
+  display: flex;
+  margin-bottom: 0.75rem;
+}
+.agent-row.user {
+  justify-content: flex-end;
+}
+.agent-row.assistant {
+  justify-content: flex-start;
+}
+.agent-bubble {
+  max-width: 75%;
+  padding: 0.75rem 1rem;
+  border-radius: 12px;
+  font-size: 0.92rem;
+  line-height: 1.4;
+  background: #ffffff;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+}
+.agent-row.user .agent-bubble {
+  background: #0f172a;
+  color: #ffffff;
+}
+.agent-input {
+  display: flex;
+  gap: 0.75rem;
+  padding: 1rem 1.25rem;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+  background: #ffffff;
+}
+.agent-input input {
+  flex: 1;
+  padding: 0.75rem 0.9rem;
+  border-radius: 10px;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+}
+.agent-hotel {
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-radius: 12px;
+  background: #ffffff;
+  padding: 0.75rem 0.9rem;
+  margin-top: 0.5rem;
+}
+.agent-hotel .title {
+  font-weight: 600;
+}
+.agent-list {
+  margin-top: 0.5rem;
+}
+.agent-room {
+  margin-top: 0.4rem;
+  padding: 0.4rem 0.6rem;
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.06);
+}
+{% endblock %}
+
+{% block content %}
+<div class="agent-container">
+  <div class="agent-card">
+    <div class="agent-header">Hotel Agent</div>
+    {% if agent_status and agent_status.message %}
+    <div class="agent-status alert alert-warning">
+      {{ agent_status.message }}
+    </div>
+    {% endif %}
+    <div class="agent-log" id="agentLog">
+      {% for m in messages %}
+      <div class="agent-row {{ m.role }}">
+        <div class="agent-bubble">
+          {% if m.type == 'hotels' %}
+            {% if m.text %}<div>{{ m.text }}</div>{% endif %}
+            <div class="agent-list">
+              {% for h in m.hotels %}
+              <div class="agent-hotel">
+                <div class="title">{{ h.hotel_name }}</div>
+                <div>Location: {{ h.location }}</div>
+                <div>Price: {{ h.price }}</div>
+                <div>Rating: {{ h.rating }}</div>
+                {% if h.link %}<div><a href="{{ h.link }}" target="_blank">Open link</a></div>{% endif %}
+              </div>
+              {% endfor %}
+            </div>
+          {% else %}
+            <div style="white-space: pre-line;">{{ m.text }}</div>
+            {% if m.type == 'booking' and m.room_types %}
+            <div class="agent-list">
+              {% for r in m.room_types %}
+              <div class="agent-room">
+                <div><strong>{{ r.type }}</strong></div>
+                <div>{{ r.description }}</div>
+              </div>
+              {% endfor %}
+            </div>
+            {% endif %}
+          {% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    <div class="agent-input">
+      <input id="agentInput" type="text" placeholder="Type your message" />
+      <button class="btn btn-primary" onclick="sendAgent()">Send</button>
+      <button class="btn btn-outline" onclick="resetAgent()">Reset</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  async function sendAgent() {
+    const input = document.getElementById('agentInput');
+    const message = input.value.trim();
+    if (!message) return;
+    input.value = '';
+    appendMessage('user', { type: 'text', text: message });
+
+    const res = await fetch('/agent/message', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message })
+    });
+    const data = await res.json();
+    if (!data.ok) {
+      appendMessage('assistant', { type: 'text', text: data.error || 'Error' });
+      return;
+    }
+    appendMessage('assistant', data.message);
+  }
+
+  async function resetAgent() {
+    await fetch('/agent/reset', { method: 'POST' });
+    const log = document.getElementById('agentLog');
+    log.innerHTML = '';
+  }
+
+  function appendMessage(role, msg) {
+    const log = document.getElementById('agentLog');
+    const row = document.createElement('div');
+    row.className = 'agent-row ' + role;
+    const bubble = document.createElement('div');
+    bubble.className = 'agent-bubble';
+
+    if (msg.type === 'hotels') {
+      if (msg.text) {
+        const text = document.createElement('div');
+        text.textContent = msg.text;
+        bubble.appendChild(text);
+      }
+      const list = document.createElement('div');
+      list.className = 'agent-list';
+      (msg.hotels || []).forEach(h => {
+        const card = document.createElement('div');
+        card.className = 'agent-hotel';
+        card.innerHTML = `
+          <div class="title">${escapeHtml(h.hotel_name || '')}</div>
+          <div>Location: ${escapeHtml(h.location || '')}</div>
+          <div>Price: ${escapeHtml(String(h.price || 0))}</div>
+          <div>Rating: ${escapeHtml(String(h.rating || 0))}</div>
+          ${h.link ? `<div><a href="${h.link}" target="_blank">Open link</a></div>` : ''}
+        `;
+        list.appendChild(card);
+      });
+      bubble.appendChild(list);
+    } else {
+      const text = document.createElement('div');
+      text.style.whiteSpace = 'pre-line';
+      text.textContent = msg.text || '';
+      bubble.appendChild(text);
+      if (msg.type === 'booking' && msg.room_types) {
+        const list = document.createElement('div');
+        list.className = 'agent-list';
+        msg.room_types.forEach(r => {
+          const item = document.createElement('div');
+          item.className = 'agent-room';
+          item.innerHTML = `<div><strong>${escapeHtml(r.type)}</strong></div><div>${escapeHtml(r.description)}</div>`;
+          list.appendChild(item);
+        });
+        bubble.appendChild(list);
+      }
+    }
+
+    row.appendChild(bubble);
+    log.appendChild(row);
+    log.scrollTop = log.scrollHeight;
+  }
+
+  function escapeHtml(text) {
+    return text.replace(/[&<>"']/g, function (m) {
+      return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[m];
+    });
+  }
+</script>
+{% endblock %}

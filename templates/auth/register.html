@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Register — Blissful Abodes{% endblock %}
+{% block content %}
+<div style="min-height:100vh;display:flex;background:var(--gradient-hero);padding:2rem;">
+    <div style="max-width:480px;width:100%;margin:auto;background:white;border-radius:24px;padding:2.5rem;box-shadow:var(--shadow-xl);">
+        <div style="text-align:center;margin-bottom:2rem;">
+            <div style="font-size:3rem;">🎉</div>
+            <h1 style="font-size:1.75rem;">Create Your Account</h1>
+            <p style="color:var(--text-light);font-size:0.9rem;">Join Blissful Abodes & start earning rewards!</p>
+        </div>
+        <form method="POST" action="{{ url_for('auth.register') }}">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+                <div class="form-group">
+                    <label class="form-label">First Name</label>
+                    <input type="text" name="first_name" class="form-control" placeholder="Rajesh" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Last Name</label>
+                    <input type="text" name="last_name" class="form-control" placeholder="Kumar" required>
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Email Address</label>
+                <input type="email" name="email" class="form-control" placeholder="your@email.com" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Phone Number</label>
+                <input type="tel" name="phone" class="form-control" placeholder="+91 98765 43210" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Password</label>
+                <input type="password" name="password" class="form-control" placeholder="Min. 8 characters" required minlength="8">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Confirm Password</label>
+                <input type="password" name="confirm_password" class="form-control" placeholder="Repeat password" required>
+            </div>
+            <div class="form-group">
+                <label style="display:flex;align-items:flex-start;gap:0.5rem;cursor:pointer;font-size:0.875rem;color:var(--text-medium);">
+                    <input type="checkbox" required style="margin-top:3px;"> I agree to the <a href="#" style="color:var(--primary);">Terms & Conditions</a> and <a href="#" style="color:var(--primary);">Privacy Policy</a>
+                </label>
+            </div>
+            <button type="submit" class="btn btn-primary btn-block btn-lg">🚀 Create Account (Free)</button>
+        </form>
+        <div style="margin-top:1.25rem;background:rgba(255,107,53,0.06);border-radius:12px;padding:1rem;font-size:0.8rem;color:var(--text-medium);text-align:center;">
+            🎁 <strong>New member bonus:</strong> Use code <strong>WELCOME10</strong> for 10% off your first booking! Get 500 bonus points on sign up.
+        </div>
+        <p style="text-align:center;color:var(--text-light);font-size:0.875rem;margin-top:1.25rem;">
+            Already have an account? <a href="{{ url_for('auth.login') }}" style="color:var(--primary);font-weight:600;">Sign in →</a>
+        </p>
+    </div>
+</div>
+{% endblock %}
+{% block footer %}{% endblock %}

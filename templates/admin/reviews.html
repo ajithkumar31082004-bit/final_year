@@ -1,0 +1,73 @@
+﻿{% extends "base.html" %}
+{% block title %}Reviews - Admin{% endblock %}
+{% block content %}
+<div class="dashboard-layout">
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <div style="font-size:2rem;">Admin</div>
+      <div class="sidebar-user-name">{{ current_user.first_name }} {{ current_user.last_name }}</div>
+      <div class="sidebar-user-role">Administrator</div>
+    </div>
+    <ul class="sidebar-nav">
+      <li><a href="{{ url_for('admin.dashboard') }}" class="nav-link"><span class="icon"><i class="fa-solid fa-chart-line"></i></span> Dashboard</a></li>
+      <li><a href="{{ url_for('admin.bookings') }}" class="nav-link"><span class="icon"><i class="fa-solid fa-receipt"></i></span> Bookings</a></li>
+      <li><a href="{{ url_for('admin.user_management') }}" class="nav-link"><span class="icon"><i class="fa-solid fa-users"></i></span> Users</a></li>
+      <li><a href="{{ url_for('admin.room_management') }}" class="nav-link"><span class="icon"><i class="fa-solid fa-bed"></i></span> Rooms</a></li>
+      <li><a href="{{ url_for('admin.analytics') }}" class="nav-link"><span class="icon"><i class="fa-solid fa-chart-column"></i></span> Analytics</a></li>
+      <li><a href="{{ url_for('admin.review_management') }}" class="nav-link active"><span class="icon"><i class="fa-solid fa-star"></i></span> Reviews</a></li>
+      <div class="sidebar-section-title">SYSTEM</div>
+      <li><a href="{{ url_for('auth.logout') }}" class="nav-link"><span class="icon"><i class="fa-solid fa-right-from-bracket"></i></span> Logout</a></li>
+    </ul>
+  </aside>
+
+  <main class="main-content">
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">Review Moderation</h1>
+        <div class="page-subtitle">Feature, respond, or remove reviews</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="table-container">
+        <table class="data-table">
+          <thead><tr><th>Guest</th><th>Room</th><th>Rating</th><th>Comment</th><th>Sentiment</th><th>Actions</th></tr></thead>
+          <tbody>
+            {% for r in reviews %}
+            <tr>
+              <td>{{ r.first_name }} {{ r.last_name }}</td>
+              <td>{{ r.room_number }} ({{ r.room_type }})</td>
+              <td>{{ r.overall_rating }}</td>
+              <td style="max-width:360px;">{{ r.comment }}</td>
+              <td><span class="badge badge-{{ 'success' if r.sentiment == 'positive' else 'danger' if r.sentiment == 'negative' else 'info' }}">{{ r.sentiment|title }}</span></td>
+              <td>
+                <button class="btn btn-sm btn-outline" onclick="reviewAction('{{ r.review_id }}','feature')">Feature</button>
+                <button class="btn btn-sm btn-warning" onclick="respondReview('{{ r.review_id }}')">Respond</button>
+                <button class="btn btn-sm btn-danger" onclick="reviewAction('{{ r.review_id }}','delete')">Delete</button>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+function reviewAction(id, action){
+  fetch(`/admin/reviews/${id}/action`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({action})
+  }).then(() => location.reload());
+}
+function respondReview(id){
+  const response = prompt('Write a response to the guest:');
+  if (!response) return;
+  fetch(`/admin/reviews/${id}/action`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({action:'respond', response})
+  }).then(() => location.reload());
+}
+</script>
+{% endblock %}

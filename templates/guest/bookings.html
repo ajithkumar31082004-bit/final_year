@@ -1,0 +1,76 @@
+﻿{% extends "base.html" %}
+{% block title %}My Bookings - Blissful Abodes{% endblock %}
+{% block content %}
+<div class="dashboard-layout">
+    <aside class="sidebar">
+        <div class="sidebar-header">
+            <div class="sidebar-user-name">{{ user.first_name }} {{ user.last_name }}</div>
+            <div class="sidebar-user-role">Guest</div>
+        </div>
+        <ul class="sidebar-nav">
+            <li><a href="{{ url_for('guest.dashboard') }}" class="nav-link"><span class="icon"><i class="fa-solid fa-chart-line"></i></span> Dashboard</a></li>
+            <li><a href="{{ url_for('guest.room_listing') }}" class="nav-link"><span class="icon"><i class="fa-solid fa-bed"></i></span> Browse Rooms</a></li>
+            <li><a href="{{ url_for('guest.my_bookings') }}" class="nav-link active"><span class="icon"><i class="fa-solid fa-receipt"></i></span> My Bookings</a></li>
+            <li><a href="{{ url_for('guest.loyalty') }}" class="nav-link"><span class="icon"><i class="fa-solid fa-trophy"></i></span> Loyalty</a></li>
+            <div class="sidebar-section-title">ACCOUNT</div>
+            <li><a href="{{ url_for('auth.logout') }}" class="nav-link"><span class="icon"><i class="fa-solid fa-right-from-bracket"></i></span> Logout</a></li>
+        </ul>
+    </aside>
+    <main class="main-content">
+        <div class="page-header">
+            <div><h1 class="page-title">My Bookings</h1></div>
+            <a href="{{ url_for('guest.room_listing') }}" class="btn btn-primary">+ New Booking</a>
+        </div>
+        <div class="card">
+            <div class="table-container">
+            <table class="data-table">
+                <thead><tr><th>Booking ID</th><th>Room</th><th>Check-in</th><th>Check-out</th><th>Amount</th><th>Status</th><th>Actions</th></tr></thead>
+                <tbody>
+                {% for b in bookings %}
+                <tr>
+                    <td style="font-family:monospace;font-size:0.8rem;">{{ b.booking_id }}</td>
+                    <td>{{ b.room_type }} #{{ b.rnum }}</td>
+                    <td>{{ b.check_in }}</td>
+                    <td>{{ b.check_out }}</td>
+                    <td>INR {{ "{:,.0f}".format(b.total_amount) }}</td>
+                    <td>
+                        <span class="badge badge-{{ 'success' if b.status == 'confirmed' else 'info' if b.status == 'completed' else 'warning' if b.status == 'pending' else 'danger' }}">
+                            {{ b.status|title }}
+                        </span>
+                    </td>
+                    <td style="display:flex;gap:0.4rem;flex-wrap:wrap;">
+                        <a href="{{ url_for('guest.booking_detail', booking_id=b.booking_id) }}" class="btn btn-sm btn-outline">View</a>
+                        {% if b.payment_status != 'paid' %}
+                        <a href="{{ url_for('guest.payment_page', booking_id=b.booking_id) }}" class="btn btn-sm btn-success">Pay Now</a>
+                        {% endif %}
+                        {% if b.status in ['confirmed', 'completed'] %}
+                        <a href="{{ url_for('guest.download_invoice', booking_id=b.booking_id) }}" class="btn btn-sm btn-gold">Invoice</a>
+                        {% endif %}
+                        {% if b.status in ['confirmed', 'pending'] %}
+                        <button class="btn btn-sm btn-danger" onclick="cancelBooking('{{ b.booking_id }}')">Cancel</button>
+                        {% endif %}
+                        {% if b.status == 'completed' %}
+                        <a href="{{ url_for('guest.write_review', booking_id=b.booking_id) }}" class="btn btn-sm btn-primary">Review</a>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% else %}
+                <tr><td colspan="7" style="text-align:center;padding:3rem;color:var(--text-light);">No bookings yet. <a href="{{ url_for('guest.room_listing') }}" style="color:var(--primary);">Book a room!</a></td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            </div>
+        </div>
+    </main>
+</div>
+<script>
+function cancelBooking(id) {
+    if (!confirm('Cancel this booking? Refund will be processed per cancellation policy.')) return;
+    fetch(`/guest/cancel-booking/${id}`, {method:'POST'})
+        .then(r => r.json()).then(d => {
+            if (d.success) { showToast(`Booking cancelled. Refund: INR ${d.refund.toFixed(0)} (${d.refund_pct}%)`); location.reload(); }
+            else showToast(d.message);
+        });
+}
+</script>
+{% endblock %}

@@ -1,0 +1,53 @@
+﻿{% extends "base.html" %}
+{% block title %}Loyalty - Blissful Abodes{% endblock %}
+{% block content %}
+<div style="background:var(--gradient-dark);padding:3rem 0;text-align:center;">
+  <h1 style="color:white;font-family:var(--font-heading);">Blissful Rewards</h1>
+  <p style="color:rgba(255,255,255,0.7);">Earn points on every stay and unlock exclusive perks</p>
+</div>
+<section style="padding:3rem 0;background:var(--bg-cream);">
+  <div class="container">
+    <div style="display:grid;grid-template-columns:1.2fr 1fr;gap:1.5rem;">
+      <div class="loyalty-card">
+        <div style="font-size:0.85rem;opacity:0.8;">Current Points</div>
+        <div style="font-size:2.6rem;font-weight:700;">{{ user.loyalty_points }}</div>
+        <div style="margin-top:0.75rem;font-size:0.9rem;opacity:0.9;">Tier: {{ user.tier_level or 'Silver' }}</div>
+      </div>
+      <div class="card">
+        <div class="card-header"><span>Tier Benefits</span></div>
+        <div class="card-body">
+          {% for name, t in tiers.items() %}
+          <div style="margin-bottom:0.9rem;">
+            <div style="font-weight:600;color:{{ t.color }};">{{ name }} Tier</div>
+            <div style="font-size:0.85rem;color:var(--text-light);">{{ ', '.join(t.perks) }}</div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:1.5rem;">
+      <div class="card-header"><span>Recent Transactions</span></div>
+      <div class="table-container">
+        <table class="data-table">
+          <thead><tr><th>Date</th><th>Type</th><th>Points</th><th>Description</th><th>Balance</th></tr></thead>
+          <tbody>
+            {% for t in transactions %}
+            <tr>
+              <td>{{ t.created_at[:10] }}</td>
+              <td>{{ t.transaction_type|title }}</td>
+              <td>{{ t.points }}</td>
+              <td>{{ t.description or '-' }}</td>
+              <td>{{ t.balance_after }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% if not transactions %}
+      <div style="padding:1.5rem;text-align:center;color:var(--text-light);">No transactions yet.</div>
+      {% endif %}
+    </div>
+  </div>
+</section>
+{% endblock %}

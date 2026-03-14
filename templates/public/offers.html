@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Special Offers - Blissful Abodes{% endblock %}
+{% block content %}
+<div style="background:var(--gradient-dark);padding:3rem 0;text-align:center;">
+    <h1 style="color:white;font-family:var(--font-heading);">Special Offers & Promotions</h1>
+    <p style="color:rgba(255,255,255,0.7);">Exclusive deals crafted just for you</p>
+</div>
+<section style="padding:4rem 0;background:var(--bg-cream);">
+    <div class="container">
+        {% if is_admin %}
+        <div class="card" style="margin-bottom:1.5rem;border-left:4px solid var(--primary);">
+            <div class="card-body">
+                <div style="font-weight:700;">Admin view</div>
+                <div style="color:var(--text-light);font-size:0.85rem;">All active coupons are visible here. Guests will only see eligible offers.</div>
+            </div>
+        </div>
+        {% elif not eligible %}
+        <div class="card" style="margin-bottom:1.5rem;border-left:4px solid var(--info);">
+            <div class="card-body">
+                <div style="font-weight:700;">Unlock offers</div>
+                <div style="color:var(--text-light);font-size:0.85rem;margin-top:0.35rem;">
+                    {% if first_booking_required and not has_first_booking %}
+                    Complete your first paid booking to unlock offers.
+                    {% endif %}
+                    {% if loyalty_points < min_points %}
+                    Earn {{ min_points - loyalty_points }} more loyalty points to unlock offers.
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:1.75rem;">
+            {% for coupon in coupons %}
+            <div class="card" style="background:linear-gradient(135deg,#fff,#f5f1e8);border-left:4px solid var(--primary);">
+                <div class="card-body" style="text-align:center;">
+                    <div style="font-size:2.2rem;margin-bottom:0.75rem;">OFFER</div>
+                    <h2 style="font-size:2.5rem;color:var(--primary);font-family:var(--font-body);margin:0;">
+                        {% if coupon.discount_type == 'percentage' %}{{ coupon.discount_value|int }}% OFF{% else %}INR {{ coupon.discount_value|int }} OFF{% endif %}
+                    </h2>
+                    <div style="background:var(--bg-cream);border:2px dashed var(--primary);border-radius:10px;padding:0.75rem;margin:1rem 0;font-size:1.25rem;font-weight:800;letter-spacing:5px;color:var(--text-dark);">{{ coupon.code }}</div>
+                    {% if coupon.min_booking_amount > 0 %}
+                    <p style="font-size:0.8rem;color:var(--text-light);">Min. booking: INR {{ "{:,.0f}".format(coupon.min_booking_amount) }}</p>
+                    {% endif %}
+                    {% if coupon.valid_until %}
+                    <p style="font-size:0.78rem;color:var(--danger);">Valid until {{ coupon.valid_until }}</p>
+                    {% endif %}
+                    <div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:1rem;">{{ coupon.max_uses - coupon.used_count }} uses remaining</div>
+                    <button onclick="navigator.clipboard.writeText('{{ coupon.code }}').then(() => showToast('Code copied'))" class="btn btn-primary btn-block">Copy Code</button>
+                </div>
+            </div>
+            {% else %}
+            <div style="grid-column:1/-1;text-align:center;padding:4rem;color:var(--text-light);">
+                <h3 style="margin-top:1rem;">No offers available right now.</h3>
+                <a href="{{ url_for('guest.room_listing') }}" class="btn btn-primary" style="margin-top:1rem;">Browse Rooms</a>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</section>
+{% endblock %}

@@ -1,0 +1,212 @@
+﻿{% extends "base.html" %}
+{% block title %}Room Management - Admin{% endblock %}
+{% block content %}
+<div class="dashboard-layout">
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <div style="font-size:2rem;">Admin</div>
+      <div class="sidebar-user-name">{{ current_user.first_name }} {{ current_user.last_name }}</div>
+      <div class="sidebar-user-role">Administrator</div>
+    </div>
+    <ul class="sidebar-nav">
+      <li><a href="{{ url_for('admin.dashboard') }}" class="nav-link"><span class="icon"><i class="fa-solid fa-chart-line"></i></span> Dashboard</a></li>
+      <li><a href="{{ url_for('admin.bookings') }}" class="nav-link"><span class="icon"><i class="fa-solid fa-receipt"></i></span> Bookings</a></li>
+      <li><a href="{{ url_for('admin.user_management') }}" class="nav-link"><span class="icon"><i class="fa-solid fa-users"></i></span> Users</a></li>
+      <li><a href="{{ url_for('admin.room_management') }}" class="nav-link active"><span class="icon"><i class="fa-solid fa-bed"></i></span> Rooms</a></li>
+      <li><a href="{{ url_for('admin.analytics') }}" class="nav-link"><span class="icon"><i class="fa-solid fa-chart-column"></i></span> Analytics</a></li>
+      <li><a href="{{ url_for('admin.review_management') }}" class="nav-link"><span class="icon"><i class="fa-solid fa-star"></i></span> Reviews</a></li>
+      <div class="sidebar-section-title">SYSTEM</div>
+      <li><a href="{{ url_for('auth.logout') }}" class="nav-link"><span class="icon"><i class="fa-solid fa-right-from-bracket"></i></span> Logout</a></li>
+    </ul>
+  </aside>
+
+  <main class="main-content">
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">Room Management</h1>
+        <div class="page-subtitle">Edit inventory and pricing</div>
+      </div>
+      <button class="btn btn-primary" onclick="document.getElementById('roomModal').classList.add('show')">+ New Room</button>
+    </div>
+
+    <div class="card">
+      <div class="table-container">
+        <table class="data-table">
+          <thead><tr><th>Room</th><th>Type</th><th>Floor</th><th>Status</th><th>Base Price</th><th>Current Price</th><th>Actions</th></tr></thead>
+          <tbody>
+            {% for r in rooms %}
+            <tr
+              data-room-id="{{ r.room_id }}"
+              data-room-number="{{ r.room_number }}"
+              data-room-type="{{ r.room_type }}"
+              data-floor="{{ r.floor }}"
+              data-base-price="{{ r.base_price }}"
+              data-current-price="{{ r.current_price }}"
+              data-max-guests="{{ r.max_guests }}"
+              data-status="{{ r.status }}"
+              data-amenities="{{ r.amenities | join(', ') }}"
+              data-description="{{ r.description or '' }}"
+            >
+              <td>{{ r.room_number }}</td>
+              <td>{{ r.room_type }}</td>
+              <td>{{ r.floor }}</td>
+              <td><span class="badge badge-{{ 'success' if r.status == 'available' else 'danger' if r.status == 'occupied' else 'warning' if r.status == 'cleaning' else 'info' }}">{{ r.status|title }}</span></td>
+              <td>INR {{ "{:,.0f}".format(r.base_price) }}</td>
+              <td>
+                <input type="number" class="form-control" value="{{ r.current_price }}" style="width:120px;" id="price_{{ r.room_id }}">
+              </td>
+              <td>
+                <button class="btn btn-sm btn-outline" onclick="openEditRoom(this)">Edit</button>
+                <button class="btn btn-sm btn-outline" onclick="updatePrice('{{ r.room_id }}')">Save</button>
+                <button class="btn btn-sm btn-danger" onclick="deleteRoom('{{ r.room_id }}')">Delete</button>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div class="modal-overlay" id="roomModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 class="modal-title">Create Room</h3>
+      <button class="modal-close" onclick="document.getElementById('roomModal').classList.remove('show')">&times;</button>
+    </div>
+    <form method="POST" action="{{ url_for('admin.create_room') }}">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+        <div class="form-group"><label class="form-label">Room Number</label><input name="room_number" class="form-control" placeholder="S201" required></div>
+        <div class="form-group"><label class="form-label">Floor</label><input type="number" name="floor" class="form-control" value="1" min="1" max="20"></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+        <div class="form-group"><label class="form-label">Room Type</label>
+          <select name="room_type" class="form-control">
+            <option value="Single">Single</option>
+            <option value="Double">Double</option>
+            <option value="Family">Family</option>
+            <option value="Couple">Couple</option>
+            <option value="VIP Suite">VIP Suite</option>
+          </select>
+        </div>
+        <div class="form-group"><label class="form-label">Max Guests</label><input type="number" name="max_guests" class="form-control" value="2" min="1" max="8"></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+        <div class="form-group"><label class="form-label">Base Price</label><input type="number" name="base_price" class="form-control" placeholder="2500" required></div>
+        <div class="form-group"><label class="form-label">Current Price</label><input type="number" name="current_price" class="form-control" placeholder="2500"></div>
+      </div>
+      <div class="form-group"><label class="form-label">Amenities (comma separated)</label><input name="amenities" class="form-control" placeholder="Wi-Fi, AC, TV, Hot Water"></div>
+      <div class="form-group"><label class="form-label">Status</label>
+        <select name="status" class="form-control">
+          <option value="available">Available</option>
+          <option value="occupied">Occupied</option>
+          <option value="cleaning">Cleaning</option>
+          <option value="maintenance">Maintenance</option>
+          <option value="out_of_service">Out of Service</option>
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Description</label><textarea name="description" class="form-control" placeholder="Short description..."></textarea></div>
+      <button type="submit" class="btn btn-primary btn-block">Create Room</button>
+    </form>
+  </div>
+</div>
+
+<div class="modal-overlay" id="editRoomModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 class="modal-title">Edit Room</h3>
+      <button class="modal-close" onclick="document.getElementById('editRoomModal').classList.remove('show')">&times;</button>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+      <div class="form-group"><label class="form-label">Room Number</label><input id="edit_room_number" class="form-control" disabled></div>
+      <div class="form-group"><label class="form-label">Floor</label><input type="number" id="edit_floor" class="form-control" min="1" max="20"></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+      <div class="form-group"><label class="form-label">Room Type</label>
+        <select id="edit_room_type" class="form-control">
+          <option value="Single">Single</option>
+          <option value="Double">Double</option>
+          <option value="Family">Family</option>
+          <option value="Couple">Couple</option>
+          <option value="VIP Suite">VIP Suite</option>
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Max Guests</label><input type="number" id="edit_max_guests" class="form-control" min="1" max="8"></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+      <div class="form-group"><label class="form-label">Base Price</label><input type="number" id="edit_base_price" class="form-control"></div>
+      <div class="form-group"><label class="form-label">Current Price</label><input type="number" id="edit_current_price" class="form-control"></div>
+    </div>
+    <div class="form-group"><label class="form-label">Amenities</label><input id="edit_amenities" class="form-control"></div>
+    <div class="form-group"><label class="form-label">Status</label>
+      <select id="edit_status" class="form-control">
+        <option value="available">Available</option>
+        <option value="occupied">Occupied</option>
+        <option value="cleaning">Cleaning</option>
+        <option value="maintenance">Maintenance</option>
+        <option value="out_of_service">Out of Service</option>
+        <option value="reserved">Reserved</option>
+      </select>
+    </div>
+    <div class="form-group"><label class="form-label">Description</label><textarea id="edit_description" class="form-control"></textarea></div>
+    <button class="btn btn-primary btn-block" onclick="saveRoomEdits()">Save Changes</button>
+  </div>
+</div>
+
+<script>
+let editingRoomId = null;
+function updatePrice(roomId){
+  const price = parseFloat(document.getElementById(`price_${roomId}`).value || '0');
+  fetch('/admin/rooms/update-price', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({room_id: roomId, price: price})
+  }).then(r => r.json()).then(() => showToast('Price updated'));
+}
+function deleteRoom(roomId){
+  if (!confirm('Delete this room? This will deactivate it.')) return;
+  fetch(`/admin/rooms/${roomId}/delete`, {method:'POST'})
+    .then(r => r.json())
+    .then(data => {
+      if (data && data.message) showToast(data.message, data.success ? 'success' : 'danger');
+      location.reload();
+    });
+}
+
+function openEditRoom(btn){
+  const row = btn.closest('tr');
+  if (!row) return;
+  editingRoomId = row.dataset.roomId;
+  document.getElementById('edit_room_number').value = row.dataset.roomNumber || '';
+  document.getElementById('edit_room_type').value = row.dataset.roomType || 'Single';
+  document.getElementById('edit_floor').value = row.dataset.floor || 1;
+  document.getElementById('edit_base_price').value = row.dataset.basePrice || 0;
+  document.getElementById('edit_current_price').value = row.dataset.currentPrice || 0;
+  document.getElementById('edit_max_guests').value = row.dataset.maxGuests || 1;
+  document.getElementById('edit_status').value = row.dataset.status || 'available';
+  document.getElementById('edit_amenities').value = row.dataset.amenities || '';
+  document.getElementById('edit_description').value = row.dataset.description || '';
+  document.getElementById('editRoomModal').classList.add('show');
+}
+
+function saveRoomEdits(){
+  if (!editingRoomId) return;
+  const payload = {
+    room_type: document.getElementById('edit_room_type').value,
+    floor: document.getElementById('edit_floor').value,
+    base_price: document.getElementById('edit_base_price').value,
+    current_price: document.getElementById('edit_current_price').value,
+    max_guests: document.getElementById('edit_max_guests').value,
+    status: document.getElementById('edit_status').value,
+    amenities: document.getElementById('edit_amenities').value,
+    description: document.getElementById('edit_description').value,
+  };
+  fetch(`/admin/rooms/${editingRoomId}/update`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify(payload)
+  }).then(r => r.json()).then(d => {
+    if (d.success) { showToast('Room updated'); location.reload(); }
+  });
+}
+</script>
+{% endblock %}

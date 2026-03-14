@@ -1,0 +1,291 @@
+{% extends "base.html" %}
+{% block title %}Book {{ room.room_type }} — Blissful Abodes{% endblock %}
+{% block content %}
+<div style="background:var(--gradient-dark);padding:2.5rem 0;text-align:center;">
+    <h1 style="color:white;">Book {{ room.room_type }}</h1>
+    <p style="color:rgba(255,255,255,0.7);">Room {{ room.room_number }} • Floor {{ room.floor }}</p>
+</div>
+
+<div class="container" style="padding:3rem 1.25rem;">
+    <div style="display:grid;grid-template-columns:3fr 2fr;gap:2rem;max-width:1100px;margin:0 auto;">
+        <!-- Booking Form -->
+        <div class="card">
+            <div class="card-header-gradient">
+                <span>📋 Booking Details</span>
+            </div>
+            <div class="card-body">
+                <form method="POST" id="bookingForm">
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+                        <div class="form-group">
+                            <label class="form-label">Check-in Date *</label>
+                            <input type="date" name="check_in" id="checkin" class="form-control" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Check-out Date *</label>
+                            <input type="date" name="check_out" id="checkout" class="form-control" required>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Number of Guests</label>
+                        <select name="num_guests" class="form-control">
+                            {% for i in range(1, room.max_guests + 1) %}
+                            <option value="{{ i }}">{{ i }} Guest{{ 's' if i > 1 else '' }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Payment Method</label>
+                        <select name="payment_method" class="form-control">
+                            <option value="UPI">📱 UPI (GPay/PhonePe/Paytm)</option>
+                            <option value="Credit_Card">💳 Credit Card</option>
+                            <option value="Debit_Card">💳 Debit Card</option>
+                            <option value="Net_Banking">🏦 Net Banking</option>
+                            <option value="EMI">💰 EMI (0% for 3 months)</option>
+                            <option value="Cash">💵 Cash at Desk</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Coupon Code</label>
+                        <div style="display:flex;gap:0.5rem;">
+                            <input type="text" name="coupon_code" id="couponCode" class="form-control" placeholder="Enter code (e.g. WELCOME10)" style="text-transform:uppercase;">
+                            <button type="button" onclick="validateCoupon()" class="btn btn-outline" style="white-space:nowrap;">Apply</button>
+                        </div>
+                        <div id="couponMsg" style="font-size:0.8rem;margin-top:0.35rem;"></div>
+                    </div>
+                    {% if current_user and current_user.loyalty_points > 0 %}
+                    <div class="form-group">
+                        <label class="form-label" style="display:flex;justify-content:space-between;">
+                            Use Loyalty Points
+                            <span style="color:var(--primary);">Available: {{ current_user.loyalty_points }} pts = ₹{{ "{:,.0f}".format(current_user.loyalty_points / 10) }}</span>
+                        </label>
+                        <input type="number" name="loyalty_points" id="loyaltyPts" class="form-control" placeholder="0" min="0" max="{{ current_user.loyalty_points }}" onchange="calculatePrice()">
+                        <small style="color:var(--text-light);">1000 pts = ₹100 discount</small>
+                    </div>
+                    {% else %}<input type="hidden" name="loyalty_points" value="0">{% endif %}
+                    <div class="form-group">
+                        <label class="form-label">Special Requests</label>
+                        <textarea name="special_requests" class="form-control" placeholder="Early check-in, high floor, dietary requirements..."></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-block btn-lg" id="submitBtn">🏨 Confirm Booking</button>
+                    <p style="text-align:center;font-size:0.78rem;color:var(--text-light);margin-top:0.75rem;">🔒 Secure booking • 100% verified payments • Instant confirmation</p>
+                </form>
+            </div>
+        </div>
+        
+        <!-- Room Summary & Price -->
+        <div>
+            <div class="card" style="margin-bottom:1.5rem;">
+                <div class="card-body" style="text-align:center;">
+                    <div style="font-size:4rem;margin-bottom:1rem;">{% if room.room_type == 'VIP Suite' %}🌊{% elif room.room_type == 'Couple' %}💑{% elif room.room_type == 'Family' %}👨‍👩‍👧‍👦{% elif room.room_type == 'Double' %}🛌{% else %}🛏️{% endif %}</div>
+                    <h3>{{ room.room_type }}</h3>
+                    <p style="color:var(--text-light);font-size:0.875rem;">Room {{ room.room_number }} • Floor {{ room.floor }}</p>
+                    <div class="room-amenities" style="justify-content:center;margin:1rem 0;">
+                        {% for a in room.amenities[:6] %}<span class="amenity-tag">{{ a }}</span>{% endfor %}
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Price Breakdown -->
+            <div class="card" id="priceCard">
+                <div class="card-header"><span>💰 Price Breakdown</span></div>
+                <div class="card-body">
+                    <div id="priceLoading" style="text-align:center;color:var(--text-light);padding:1rem;">Select dates to see pricing</div>
+                    <div id="priceBreakdown" style="display:none;">
+                        <div id="baseRateRow" style="display:none;justify-content:space-between;padding:0.5rem 0;border-bottom:1px solid rgba(0,0,0,0.06);color:var(--text-light);"><span>Base rate</span><span id="baseRate"></span></div>
+                        <div style="display:flex;justify-content:space-between;padding:0.5rem 0;border-bottom:1px solid rgba(0,0,0,0.06);"><span id="perNightLabel">Per night</span><span id="perNight" style="font-weight:600;"></span></div>
+                        <div id="aiAdjustRow" style="display:none;justify-content:space-between;padding:0.5rem 0;border-bottom:1px solid rgba(0,0,0,0.06);color:var(--info);"><span>AI adjustment</span><span id="aiAdjust"></span></div>
+                        <div style="display:flex;justify-content:space-between;padding:0.5rem 0;border-bottom:1px solid rgba(0,0,0,0.06);"><span>× <span id="nights">0</span> nights</span><span id="baseAmount"></span></div>
+                        <div id="discountRow" style="display:none;color:var(--success);justify-content:space-between;padding:0.5rem 0;border-bottom:1px solid rgba(0,0,0,0.06);"><span>- Discount</span><span id="discountAmt"></span></div>
+                        <div style="display:flex;justify-content:space-between;padding:0.5rem 0;border-bottom:1px solid rgba(0,0,0,0.06);color:var(--text-light);"><span>+ GST (18%)</span><span id="gstAmt"></span></div>
+                        <div style="display:flex;justify-content:space-between;padding:0.875rem 0;font-size:1.25rem;font-weight:700;color:var(--primary);"><span>Total</span><span id="totalAmt"></span></div>
+                        <div style="font-size:0.75rem;color:var(--text-muted);text-align:center;margin-top:0.25rem;">🤖 AI-optimized pricing applied</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Cancellation Policy -->
+            <div style="margin-top:1rem;padding:1rem;background:rgba(23,162,184,0.06);border-radius:12px;border-left:4px solid var(--info);">
+                <div style="font-weight:600;font-size:0.85rem;margin-bottom:0.5rem;">📋 Cancellation Policy</div>
+                <div style="font-size:0.78rem;color:var(--text-medium);line-height:1.6;">
+                    ✅ 48+ hours before: Full refund<br>
+                    ⚠️ 24-48 hours before: 50% refund<br>
+                    ❌ Within 24 hours: No refund
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const roomType = '{{ room.room_type }}';
+const roomId = '{{ room.room_id }}';
+let discountAmount = 0;
+let lastPriceData = null;
+
+function renderPrice(data) {
+    const loyaltyInput = document.getElementById('loyaltyPts');
+    const loyaltyPts = loyaltyInput ? parseInt(loyaltyInput.value || '0', 10) : 0;
+    const loyaltyDiscount = Math.max(0, loyaltyPts / 10);
+    const totalDiscount = Math.max(0, discountAmount + loyaltyDiscount);
+
+    const taxable = Math.max(0, data.base_amount - totalDiscount);
+    const gst = taxable * 0.18;
+    const total = taxable + gst;
+
+    const perNight = Number(data.per_night || 0);
+    const baseRate = Number(data.base_price || perNight);
+    const baseRateRow = document.getElementById('baseRateRow');
+    const aiAdjustRow = document.getElementById('aiAdjustRow');
+    const perNightLabel = document.getElementById('perNightLabel');
+
+    const roundedBase = Math.round(baseRate);
+    const roundedPer = Math.round(perNight);
+    if (roundedBase && roundedPer && roundedBase !== roundedPer) {
+        baseRateRow.style.display = 'flex';
+        document.getElementById('baseRate').textContent = 'INR ' + roundedBase.toLocaleString('en-IN');
+        const delta = roundedPer - roundedBase;
+        aiAdjustRow.style.display = 'flex';
+        document.getElementById('aiAdjust').textContent = (delta >= 0 ? '+ INR ' : '- INR ') + Math.abs(delta).toLocaleString('en-IN');
+        perNightLabel.textContent = 'Per night (AI rate)';
+    } else {
+        baseRateRow.style.display = 'none';
+        aiAdjustRow.style.display = 'none';
+        perNightLabel.textContent = 'Per night';
+    }
+
+    document.getElementById('perNight').textContent = 'INR ' + perNight.toLocaleString('en-IN');
+    document.getElementById('nights').textContent = data.nights;
+    document.getElementById('baseAmount').textContent = 'INR ' + data.base_amount.toLocaleString('en-IN');
+    document.getElementById('gstAmt').textContent = 'INR ' + gst.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    document.getElementById('totalAmt').textContent = 'INR ' + Math.round(total).toLocaleString('en-IN');
+
+    const discountRow = document.getElementById('discountRow');
+    if (totalDiscount > 0) {
+        discountRow.style.display = 'flex';
+        document.getElementById('discountAmt').textContent = '- INR ' + Math.round(totalDiscount).toLocaleString('en-IN');
+    } else {
+        discountRow.style.display = 'none';
+    }
+}
+
+function calculatePrice() {
+    const ci = document.getElementById('checkin').value;
+    const co = document.getElementById('checkout').value;
+    if (!ci || !co) return;
+
+    document.getElementById('priceLoading').style.display = 'block';
+    document.getElementById('priceBreakdown').style.display = 'none';
+
+    fetch('/api/price-calculator', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({room_type: roomType, room_id: roomId, check_in: ci, check_out: co})
+    }).then(r => r.json()).then(data => {
+        if (data.error) return;
+        lastPriceData = data;
+        document.getElementById('priceLoading').style.display = 'none';
+        document.getElementById('priceBreakdown').style.display = 'block';
+        renderPrice(data);
+
+        const code = document.getElementById('couponCode').value;
+        if (code) validateCoupon(true);
+    });
+}
+function validateCoupon() {
+    const code = document.getElementById('couponCode').value;
+    const msgEl = document.getElementById('couponMsg');
+    if (!code) {
+        discountAmount = 0;
+        msgEl.textContent = '';
+        if (lastPriceData) renderPrice(lastPriceData);
+        return;
+    }
+    if (!lastPriceData) {
+        calculatePrice();
+        return;
+    }
+
+    const baseAmt = lastPriceData.base_amount;
+
+    fetch('/api/validate-coupon', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({code: code.toUpperCase(), amount: baseAmt})
+    }).then(r => r.json()).then(d => {
+        if (d.valid) {
+            discountAmount = d.discount_amount;
+            msgEl.style.color = 'var(--success)';
+            msgEl.textContent = d.message;
+        } else {
+            discountAmount = 0;
+            msgEl.style.color = 'var(--danger)';
+            msgEl.textContent = d.message;
+        }
+        if (lastPriceData) renderPrice(lastPriceData);
+    });
+}
+// Initialize dates from query params if present
+document.addEventListener('DOMContentLoaded', function() {
+    const params = new URLSearchParams(window.location.search);
+    const checkinEl = document.getElementById('checkin');
+    const checkoutEl = document.getElementById('checkout');
+    const guestsEl = document.querySelector('select[name="num_guests"]');
+    const fmt = d => d.toISOString().split('T')[0];
+
+    const today = new Date();
+    const minCheckin = fmt(today);
+    checkinEl.min = minCheckin;
+
+    const qsCheckIn = params.get('check_in');
+    const qsCheckOut = params.get('check_out');
+    const qsGuests = params.get('guests');
+
+    if (qsCheckIn) checkinEl.value = qsCheckIn;
+    if (qsCheckOut) checkoutEl.value = qsCheckOut;
+
+    // Auto-fill default dates (tomorrow + next day) if no query params provided
+    if (!qsCheckIn && !checkinEl.value) {
+        const tomorrow = new Date(today);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        checkinEl.value = fmt(tomorrow);
+    }
+    if (!qsCheckOut && !checkoutEl.value) {
+        const dayAfter = new Date(today);
+        dayAfter.setDate(dayAfter.getDate() + 2);
+        checkoutEl.value = fmt(dayAfter);
+    }
+
+    if (checkinEl.value) {
+        const minCheckoutDate = new Date(checkinEl.value);
+        minCheckoutDate.setDate(minCheckoutDate.getDate() + 1);
+        checkoutEl.min = fmt(minCheckoutDate);
+    } else {
+        const tomorrow = new Date(today);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        checkoutEl.min = fmt(tomorrow);
+    }
+
+    if (qsGuests && guestsEl) {
+        const opt = guestsEl.querySelector(`option[value="${qsGuests}"]`);
+        if (opt) guestsEl.value = qsGuests;
+    }
+
+    checkinEl.addEventListener('change', function() {
+        if (checkinEl.value) {
+            const minCheckoutDate = new Date(checkinEl.value);
+            minCheckoutDate.setDate(minCheckoutDate.getDate() + 1);
+            const minCheckoutStr = fmt(minCheckoutDate);
+            checkoutEl.min = minCheckoutStr;
+            if (checkoutEl.value && checkoutEl.value < minCheckoutStr) {
+                checkoutEl.value = minCheckoutStr;
+            }
+        }
+        calculatePrice();
+    });
+    checkoutEl.addEventListener('change', calculatePrice);
+
+    if (checkinEl.value && checkoutEl.value) {
+        calculatePrice();
+    }
+});
+</script>
+{% endblock %}
+

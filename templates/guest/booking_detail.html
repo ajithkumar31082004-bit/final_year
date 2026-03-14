@@ -1,0 +1,83 @@
+﻿{% extends "base.html" %}
+{% block title %}Booking {{ booking.booking_id }} - Blissful Abodes{% endblock %}
+{% block content %}
+<div style="background:var(--gradient-dark);padding:3rem 0;text-align:center;">
+  <h1 style="color:white;font-family:var(--font-heading);">Booking Details</h1>
+  <p style="color:rgba(255,255,255,0.7);">Booking ID: {{ booking.booking_id }}</p>
+</div>
+
+<section style="padding:3rem 0;background:var(--bg-cream);">
+  <div class="container-sm">
+    <div class="card" style="margin-bottom:1.5rem;">
+      <div class="card-header"><span>Stay Summary</span></div>
+      <div class="card-body">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+          <div><strong>Room:</strong> {{ booking.room_number }} ({{ booking.room_type }})</div>
+          <div><strong>Nights:</strong> {{ booking.nights }}</div>
+          <div><strong>Check-in:</strong> {{ booking.check_in }} at 2:00 PM</div>
+          <div><strong>Check-out:</strong> {{ booking.check_out }} at 12:00 PM</div>
+          <div><strong>Guests:</strong> {{ booking.num_guests }}</div>
+          <div><strong>Status:</strong> <span class="badge badge-{{ 'success' if booking.status == 'confirmed' else 'info' if booking.status == 'completed' else 'danger' if booking.status == 'cancelled' else 'warning' }}">{{ booking.status|title }}</span></div>
+          <div><strong>Payment:</strong> <span class="badge badge-{{ 'success' if booking.payment_status == 'paid' else 'warning' }}">{{ booking.payment_status|title }}</span></div>
+          <div><strong>Payment Method:</strong> {{ booking.payment_method }}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:1.5rem;">
+      <div class="card-header"><span>Price Breakdown</span></div>
+      <div class="card-body">
+        <div style="display:flex;justify-content:space-between;padding:0.4rem 0;">
+          <span>Base Amount</span><span>INR {{ "{:,.0f}".format(booking.base_amount) }}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;padding:0.4rem 0;">
+          <span>Discount</span><span>-INR {{ "{:,.0f}".format(booking.discount_amount or 0) }}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;padding:0.4rem 0;">
+          <span>GST (18%)</span><span>INR {{ "{:,.0f}".format(booking.gst_amount) }}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;padding:0.7rem 0;font-weight:700;color:var(--primary);">
+          <span>Total</span><span>INR {{ "{:,.0f}".format(booking.total_amount) }}</span>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:0.75rem;flex-wrap:wrap;">
+      <a class="btn btn-outline" href="{{ url_for('guest.my_bookings') }}">Back to My Bookings</a>
+      <a class="btn btn-primary" href="{{ url_for('guest.download_invoice', booking_id=booking.booking_id) }}">Download GST Invoice</a>
+      {% if booking.payment_status != 'paid' %}
+      <a class="btn btn-success" href="{{ url_for('guest.payment_page', booking_id=booking.booking_id) }}">Complete Payment</a>
+      {% endif %}
+      {% if booking.status not in ['cancelled','completed'] %}
+      <button class="btn btn-danger" onclick="cancelBooking('{{ booking.booking_id }}')">Cancel Booking</button>
+      {% endif %}
+    </div>
+
+    {% if booking.qr_code_path %}
+    <div class="card" style="margin-top:1.5rem;">
+      <div class="card-header"><span>Express Check-in QR</span></div>
+      <div class="card-body" style="text-align:center;">
+        <img src="/{{ booking.qr_code_path }}" alt="QR Code" style="max-width:220px;margin:0 auto;">
+        <div style="color:var(--text-light);font-size:0.85rem;margin-top:0.5rem;">Show this QR at the front desk for quick check-in.</div>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</section>
+
+<script>
+function cancelBooking(bookingId) {
+  if (!confirm('Cancel this booking? Refund will be applied based on policy.')) return;
+  fetch(`/guest/cancel-booking/${bookingId}`, {method:'POST'})
+    .then(r => r.json())
+    .then(d => {
+      if (d.success) {
+        showToast(`Booking cancelled. Refund: INR ${Math.round(d.refund)}`);
+        setTimeout(() => location.reload(), 800);
+      } else {
+        showToast(d.message || 'Unable to cancel', 3000);
+      }
+    });
+}
+</script>
+{% endblock %}

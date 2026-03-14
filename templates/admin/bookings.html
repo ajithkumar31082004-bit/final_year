@@ -1,0 +1,84 @@
+﻿{% extends "base.html" %}
+{% block title %}Bookings - Admin{% endblock %}
+{% block content %}
+<div class="dashboard-layout">
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <div style="font-size:2rem;">Admin</div>
+      <div class="sidebar-user-name">{{ current_user.first_name }} {{ current_user.last_name }}</div>
+      <div class="sidebar-user-role">Administrator</div>
+    </div>
+    <ul class="sidebar-nav">
+      <li><a href="{{ url_for('admin.dashboard') }}" class="nav-link"><span class="icon"><i class="fa-solid fa-chart-line"></i></span> Dashboard</a></li>
+      <li><a href="{{ url_for('admin.bookings') }}" class="nav-link active"><span class="icon"><i class="fa-solid fa-receipt"></i></span> Bookings</a></li>
+      <li><a href="{{ url_for('admin.user_management') }}" class="nav-link"><span class="icon"><i class="fa-solid fa-users"></i></span> Users</a></li>
+      <li><a href="{{ url_for('admin.room_management') }}" class="nav-link"><span class="icon"><i class="fa-solid fa-bed"></i></span> Rooms</a></li>
+      <li><a href="{{ url_for('admin.analytics') }}" class="nav-link"><span class="icon"><i class="fa-solid fa-chart-column"></i></span> Analytics</a></li>
+      <li><a href="{{ url_for('admin.review_management') }}" class="nav-link"><span class="icon"><i class="fa-solid fa-star"></i></span> Reviews</a></li>
+      <div class="sidebar-section-title">SYSTEM</div>
+      <li><a href="{{ url_for('auth.logout') }}" class="nav-link"><span class="icon"><i class="fa-solid fa-right-from-bracket"></i></span> Logout</a></li>
+    </ul>
+  </aside>
+
+  <main class="main-content">
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">Bookings</h1>
+        <div class="page-subtitle">All reservations and payment status</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="table-container">
+        <table class="data-table">
+          <thead><tr><th>ID</th><th>Guest</th><th>Room</th><th>Check-in</th><th>Amount</th><th>Status</th><th>Payment</th><th>Actions</th></tr></thead>
+          <tbody>
+            {% for b in bookings %}
+            <tr>
+              <td style="font-family:monospace;font-size:0.8rem;">{{ b.booking_id }}</td>
+              <td>{{ b.first_name }} {{ b.last_name }}</td>
+              <td>{{ b.room_type }}</td>
+              <td>{{ b.check_in }}</td>
+              <td>INR {{ "{:,.0f}".format(b.total_amount) }}</td>
+              <td><span class="badge badge-{{ 'success' if b.status == 'confirmed' else 'info' if b.status == 'completed' else 'danger' if b.status == 'cancelled' else 'warning' }}">{{ b.status|title }}</span></td>
+              <td><span class="badge badge-{{ 'success' if b.payment_status == 'paid' else 'warning' }}">{{ b.payment_status|title }}</span></td>
+              <td>
+                <select id="status_{{ b.booking_id }}" class="form-control" style="width:auto;display:inline-block;">
+                  <option value="pending" {% if b.status == 'pending' %}selected{% endif %}>Pending</option>
+                  <option value="confirmed" {% if b.status == 'confirmed' %}selected{% endif %}>Confirmed</option>
+                  <option value="completed" {% if b.status == 'completed' %}selected{% endif %}>Completed</option>
+                  <option value="cancelled" {% if b.status == 'cancelled' %}selected{% endif %}>Cancelled</option>
+                </select>
+                <button class="btn btn-sm btn-primary" onclick="updateBookingStatus('{{ b.booking_id }}')">Save</button>
+                <button class="btn btn-sm btn-danger" onclick="cancelBooking('{{ b.booking_id }}')">Cancel</button>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+function updateBookingStatus(bookingId){
+  const status = document.getElementById(`status_${bookingId}`).value;
+  fetch('/api/admin/booking/status', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({booking_id: bookingId, status: status})
+  }).then(r => r.json()).then(d => {
+    if (d.success) { showToast('Booking updated'); location.reload(); }
+  });
+}
+function cancelBooking(bookingId){
+  if (!confirm('Cancel this booking?')) return;
+  fetch('/api/admin/booking/cancel', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({booking_id: bookingId})
+  }).then(r => r.json()).then(d => {
+    if (d.success) { showToast('Booking cancelled'); location.reload(); }
+  });
+}
+</script>
+{% endblock %}

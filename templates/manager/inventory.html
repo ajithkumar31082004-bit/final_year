@@ -1,0 +1,62 @@
+﻿{% extends "base.html" %}
+{% block title %}Inventory - Manager{% endblock %}
+{% block content %}
+<div class="dashboard-layout">
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <div style="font-size:2rem;">Manager</div>
+      <div class="sidebar-user-name">{{ user.first_name }} {{ user.last_name }}</div>
+      <div class="sidebar-user-role">{{ user.department or 'Manager' }}</div>
+    </div>
+    <ul class="sidebar-nav">
+      <li><a href="{{ url_for('manager.dashboard') }}" class="nav-link"><span class="icon"><i class="fa-solid fa-chart-line"></i></span> Dashboard</a></li>
+      <li><a href="{{ url_for('manager.shift_management') }}" class="nav-link"><span class="icon"><i class="fa-solid fa-calendar-days"></i></span> Shifts</a></li>
+      <li><a href="{{ url_for('manager.inventory_management') }}" class="nav-link active"><span class="icon"><i class="fa-solid fa-boxes-stacked"></i></span> Inventory</a></li>
+      <li><a href="{{ url_for('manager.task_management') }}" class="nav-link"><span class="icon"><i class="fa-solid fa-list-check"></i></span> Tasks</a></li>
+      <div class="sidebar-section-title">SYSTEM</div>
+      <li><a href="{{ url_for('auth.logout') }}" class="nav-link"><span class="icon"><i class="fa-solid fa-right-from-bracket"></i></span> Logout</a></li>
+    </ul>
+  </aside>
+
+  <main class="main-content">
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">Inventory</h1>
+        <div class="page-subtitle">Monitor stock levels and reorder points</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="table-container">
+        <table class="data-table">
+          <thead><tr><th>Item</th><th>Category</th><th>Stock</th><th>Reorder Level</th><th>Update</th></tr></thead>
+          <tbody>
+            {% for i in inventory %}
+            <tr>
+              <td>{{ i.name }}</td>
+              <td>{{ i.category }}</td>
+              <td><span class="badge badge-{{ 'danger' if i.stock_count <= i.reorder_level else 'success' }}">{{ i.stock_count }}</span></td>
+              <td>{{ i.reorder_level }}</td>
+              <td>
+                <input type="number" class="form-control" value="{{ i.stock_count }}" style="width:100px;" id="inv_{{ i.item_id }}">
+                <button class="btn btn-sm btn-outline" onclick="updateStock('{{ i.item_id }}')">Save</button>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+function updateStock(itemId){
+  const stock = parseInt(document.getElementById(`inv_${itemId}`).value || '0', 10);
+  fetch('/api/manager/inventory/update', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({item_id:itemId, stock_count:stock})
+  }).then(() => showToast('Inventory updated'));
+}
+</script>
+{% endblock %}

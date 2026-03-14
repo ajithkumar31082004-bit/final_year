@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+*.pyo
+venv/
+.env
+uploads/
+blissful_abodes.db

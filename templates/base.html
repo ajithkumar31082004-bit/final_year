@@ -1,0 +1,742 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>
+      {% block title %}Blissful Abodes Chennai — Luxury Hotel{% endblock %}
+    </title>
+    <meta
+      name="description"
+      content="{% block description %}Experience luxury at Blissful Abodes Chennai - Premium hotel at Marina Beach Road. Book now with exclusive rates!{% endblock %}"
+    />
+
+    <!-- Fonts & Icons -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Poppins:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+    />
+
+    <!-- CSS -->
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='css/main.css') }}"
+    />
+    {% block extra_css %}{% endblock %}
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+    <style>
+      /* Page-specific overrides */
+      {% block extra_style %}{% endblock %}
+    </style>
+  </head>
+  <body>
+    <!-- ========== NAVBAR ========== -->
+    <nav class="navbar">
+      <div class="navbar-inner">
+        <!-- Logo -->
+        <a href="{{ url_for('index') }}" class="navbar-brand">
+          <span class="brand-icon">🏨</span>
+          <div>
+            Blissful Abodes
+            <span class="brand-sub">CHENNAI LUXURY HOTEL</span>
+          </div>
+        </a>
+
+        <!-- Desktop Nav -->
+        <ul class="navbar-nav" id="desktopNav">
+          <li>
+            <a
+              href="{{ url_for('index') }}"
+              class="nav-link {% if request.endpoint == 'index' %}active{% endif %}"
+              >Home</a
+            >
+          </li>
+          <li>
+            <a
+              href="{{ url_for('guest.room_listing') }}"
+              class="nav-link {% if request.endpoint == 'guest.room_listing' %}active{% endif %}"
+              >Rooms</a
+            >
+          </li>
+          <li><a href="{{ url_for('offers') }}" class="nav-link">Offers</a></li>
+          <li><a href="{{ url_for('agent.agent_home') }}" class="nav-link">Agent</a></li>
+          <li><a href="{{ url_for('about') }}" class="nav-link">About</a></li>
+          <li>
+            <a href="{{ url_for('contact') }}" class="nav-link">Contact</a>
+          </li>
+        </ul>
+
+        <!-- Right Side -->
+        <div class="d-flex align-center gap-2">
+          <!-- Dark Mode -->
+          <button
+            onclick="toggleDarkMode()"
+            title="Toggle Dark Mode"
+            style="
+              background: none;
+              border: none;
+              color: rgba(255, 255, 255, 0.8);
+              font-size: 1.1rem;
+              cursor: pointer;
+              padding: 0.4rem;
+            "
+            id="darkModeBtn"
+          >
+            🌙
+          </button>
+
+          <!-- Language -->
+          <select
+            onchange="changeLanguage(this.value)"
+            style="
+              background: transparent;
+              border: 1px solid rgba(255, 255, 255, 0.2);
+              color: rgba(255, 255, 255, 0.8);
+              border-radius: 20px;
+              padding: 0.3rem 0.6rem;
+              font-size: 0.75rem;
+              cursor: pointer;
+              outline: none;
+            "
+          >
+            <option value="en">🌐 EN</option>
+            <option value="hi">🇮🇳 HI</option>
+            <option value="ta">🌿 TA</option>
+          </select>
+
+          {% if current_user %}
+          <!-- Notifications -->
+          <div class="user-menu" id="notifMenu">
+            <button
+              class="notif-bell"
+              onclick="toggleNotifDropdown()"
+              title="Notifications"
+            >
+              🔔 {% if unread_notifications > 0 %}
+              <span class="notif-badge">{{ unread_notifications }}</span>
+              {% endif %}
+            </button>
+            <div class="notif-dropdown" id="notifDropdown">
+              <div class="notif-header">
+                <span>Notifications</span>
+                <a
+                  href="#"
+                  onclick="markAllRead()"
+                  style="font-size: 0.75rem; color: var(--primary)"
+                  >Mark all read</a
+                >
+              </div>
+              {% if current_user.notifications_list %} {% for n in current_user.notifications_list %}
+              <div
+                class="notif-item {% if not n.read_status %}unread{% endif %}"
+                onclick="window.location='{{ n.action_url or '#' }}'"
+              >
+                <div class="notif-title">{{ n.title }}</div>
+                <div class="notif-msg">
+                  {{ n.message[:80] }}{% if n.message|length > 80 %}...{% endif %}
+                </div>
+                <div class="notif-time">{{ n.created_at[:16] }}</div>
+              </div>
+              {% endfor %} {% else %}
+              <div
+                style="
+                  padding: 1.5rem;
+                  text-align: center;
+                  color: var(--text-light);
+                  font-size: 0.85rem;
+                "
+              >
+                No notifications
+              </div>
+              {% endif %}
+            </div>
+          </div>
+
+          <!-- User Menu -->
+          <div class="user-menu" id="userMenu">
+            <div class="user-avatar" onclick="toggleUserDropdown()">
+              {{ current_user.first_name[0] }}{{ current_user.last_name[0] }}
+            </div>
+            <div class="dropdown-menu" id="userDropdown">
+              <div
+                style="
+                  padding: 0.875rem 1rem;
+                  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+                "
+              >
+                <div style="font-weight: 600; font-size: 0.9rem">
+                  {{ current_user.first_name }} {{ current_user.last_name }}
+                </div>
+                <div style="font-size: 0.75rem; color: var(--text-light)">
+                  {{ current_user.email }}
+                </div>
+                <span
+                  class="badge badge-primary"
+                  style="margin-top: 0.3rem; font-size: 0.65rem"
+                  >{{ current_user.role | title }}</span
+                >
+              </div>
+              <a href="/redirect-dashboard" class="dropdown-item"
+                >📊 Dashboard</a
+              >
+              {% if current_user.role == 'guest' %}
+              <a href="{{ url_for('guest.loyalty') }}" class="dropdown-item"
+                >🏆 Loyalty Points</a
+              >
+              <a href="{{ url_for('guest.my_bookings') }}" class="dropdown-item"
+                >📋 My Bookings</a
+              >
+              {% endif %}
+              <div class="dropdown-divider"></div>
+              <a
+                href="{{ url_for('auth.logout') }}"
+                class="dropdown-item"
+                style="color: var(--danger)"
+                >🚪 Logout</a
+              >
+            </div>
+          </div>
+          {% else %}
+          <a
+            href="{{ url_for('auth.login') }}"
+            class="btn btn-outline-light btn-sm"
+            >Login</a
+          >
+          <a
+            href="{{ url_for('guest.room_listing') }}"
+            class="btn btn-primary btn-sm btn-book-nav"
+            >Book Now</a
+          >
+          {% endif %}
+
+          <!-- Mobile Toggle -->
+          <button class="nav-toggle" onclick="toggleMobileNav()">☰</button>
+        </div>
+      </div>
+    </nav>
+
+    <!-- Mobile Nav -->
+    <div
+      id="mobileNav"
+      style="
+        display: none;
+        background: var(--gradient-dark);
+        padding: 1rem;
+        border-top: 1px solid rgba(255, 255, 255, 0.1);
+      "
+    >
+      <a
+        href="{{ url_for('index') }}"
+        style="
+          display: block;
+          color: rgba(255, 255, 255, 0.85);
+          padding: 0.7rem 1rem;
+          border-radius: 8px;
+          font-size: 0.9rem;
+        "
+        >Home</a
+      >
+      <a
+        href="{{ url_for('guest.room_listing') }}"
+        style="
+          display: block;
+          color: rgba(255, 255, 255, 0.85);
+          padding: 0.7rem 1rem;
+          border-radius: 8px;
+          font-size: 0.9rem;
+        "
+        >Rooms</a
+      >
+      <a
+        href="{{ url_for('offers') }}"
+        style="
+          display: block;
+          color: rgba(255, 255, 255, 0.85);
+          padding: 0.7rem 1rem;
+          border-radius: 8px;
+          font-size: 0.9rem;
+        "
+        >Offers</a
+      >
+      <a
+        href="{{ url_for('agent.agent_home') }}"
+        style="
+          display: block;
+          color: rgba(255, 255, 255, 0.85);
+          padding: 0.7rem 1rem;
+          border-radius: 8px;
+          font-size: 0.9rem;
+        "
+        >Agent</a
+      >
+      <a
+        href="{{ url_for('about') }}"
+        style="
+          display: block;
+          color: rgba(255, 255, 255, 0.85);
+          padding: 0.7rem 1rem;
+          border-radius: 8px;
+          font-size: 0.9rem;
+        "
+        >About</a
+      >
+      <a
+        href="{{ url_for('contact') }}"
+        style="
+          display: block;
+          color: rgba(255, 255, 255, 0.85);
+          padding: 0.7rem 1rem;
+          border-radius: 8px;
+          font-size: 0.9rem;
+        "
+        >Contact</a
+      >
+    </div>
+
+    <!-- Impersonation Banner -->
+    {% if session.get('is_impersonating') %}
+    <div
+      style="
+        background: #ff9500;
+        color: white;
+        text-align: center;
+        padding: 0.5rem;
+        font-size: 0.85rem;
+        font-weight: 600;
+      "
+    >
+      ⚠️ You are currently impersonating a user.
+      <a
+        href="{{ url_for('superadmin.stop_impersonate') }}"
+        style="color: white; text-decoration: underline"
+        >Stop Impersonation</a
+      >
+    </div>
+    {% endif %}
+
+    <!-- Flash Messages -->
+    <div class="flash-container" id="flashContainer">
+      {% with messages = get_flashed_messages(with_categories=true) %} {% for category, message in messages %}
+      <div
+        class="alert alert-{{ 'danger' if category == 'error' else category }}"
+        id="flash_{{ loop.index }}"
+      >
+        <span
+          >{{ '✅' if category == 'success' else '❌' if category == 'danger' else '⚠️' if category == 'warning' else 'ℹ️' }}</span
+        >
+        {{ message }}
+        <button
+          onclick="this.parentElement.remove()"
+          style="
+            background: none;
+            border: none;
+            cursor: pointer;
+            margin-left: auto;
+            font-size: 1rem;
+            opacity: 0.7;
+          "
+        >
+          &times;
+        </button>
+      </div>
+      {% endfor %} {% endwith %}
+    </div>
+
+    <!-- Main Content -->
+    <main>{% block content %}{% endblock %}</main>
+
+    <!-- Chatbot (on public pages) -->
+    {% block chatbot %} {% if not request.endpoint or request.endpoint.startswith('index') or request.endpoint.startswith('guest.room') or request.endpoint.startswith('about') or request.endpoint.startswith('contact') %}
+    <button
+      class="chatbot-toggle"
+      onclick="toggleChatbot()"
+      title="Chat with Aria"
+    >
+      🤖
+    </button>
+    <div class="chatbot-window" id="chatbotWindow">
+      <div class="chatbot-header">
+        <div class="chatbot-avatar">🤖</div>
+        <div>
+          <div class="chatbot-title">Aria — Your AI Concierge</div>
+          <div class="chatbot-status">🟢 Online • Always here to help</div>
+        </div>
+        <button
+          onclick="toggleChatbot()"
+          style="
+            background: none;
+            border: none;
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 1.25rem;
+            cursor: pointer;
+            margin-left: auto;
+          "
+        >
+          &times;
+        </button>
+      </div>
+      <div class="chatbot-messages" id="chatMessages">
+        <div class="chat-message bot">
+          <div class="message-bubble">
+            🙏 Namaste! I'm Aria, your AI concierge at Blissful Abodes. How can
+            I help you today?
+          </div>
+        </div>
+        <div
+          style="
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+            margin-top: 0.5rem;
+          "
+        >
+          <button
+            class="btn btn-sm btn-outline"
+            onclick="sendQuickMsg('Show available rooms')"
+            style="font-size: 0.75rem"
+          >
+            🛏️ Rooms
+          </button>
+          <button
+            class="btn btn-sm btn-outline"
+            onclick="sendQuickMsg('What are your prices?')"
+            style="font-size: 0.75rem"
+          >
+            💰 Prices
+          </button>
+          <button
+            class="btn btn-sm btn-outline"
+            onclick="sendQuickMsg('What offers do you have?')"
+            style="font-size: 0.75rem"
+          >
+            🎁 Offers
+          </button>
+          <button
+            class="btn btn-sm btn-outline"
+            onclick="sendQuickMsg('How to check in?')"
+            style="font-size: 0.75rem"
+          >
+            ✅ Check-in
+          </button>
+        </div>
+      </div>
+      <div class="chatbot-input">
+        <input
+          type="text"
+          id="chatInput"
+          placeholder="Type your question..."
+          onkeypress="if (event.key === 'Enter') sendChat();"
+        />
+        <button class="btn btn-primary btn-sm" onclick="sendChat()">
+          Send
+        </button>
+      </div>
+    </div>
+    {% endif %} {% endblock %}
+
+    <!-- Footer -->
+    {% block footer %}
+    <footer class="footer">
+      <div class="container">
+        <div class="footer-grid">
+          <div>
+            <div class="footer-brand">🏨 Blissful Abodes</div>
+            <p class="footer-desc">
+              Experience unparalleled luxury at Chennai's premier hotel on
+              Marina Beach Road. 100 exquisite rooms, world-class amenities, and
+              personalized service await you.
+            </p>
+            <div style="margin-top: 1rem; display: flex; gap: 0.75rem">
+              <a
+                href="#"
+                style="
+                  color: rgba(255, 255, 255, 0.6);
+                  font-size: 1.3rem;
+                  transition: all 0.3s;
+                "
+                onmouseover="this.style.color = '#1877f2'"
+                onmouseout="this.style.color = 'rgba(255,255,255,0.6)'"
+                >📘</a
+              >
+              <a
+                href="#"
+                style="
+                  color: rgba(255, 255, 255, 0.6);
+                  font-size: 1.3rem;
+                  transition: all 0.3s;
+                "
+                onmouseover="this.style.color = '#e4405f'"
+                onmouseout="this.style.color = 'rgba(255,255,255,0.6)'"
+                >📸</a
+              >
+              <a
+                href="#"
+                style="
+                  color: rgba(255, 255, 255, 0.6);
+                  font-size: 1.3rem;
+                  transition: all 0.3s;
+                "
+                onmouseover="this.style.color = '#1da1f2'"
+                onmouseout="this.style.color = 'rgba(255,255,255,0.6)'"
+                >🐦</a
+              >
+            </div>
+          </div>
+          <div>
+            <div class="footer-heading">Explore</div>
+            <ul class="footer-links">
+              <li>
+                <a href="{{ url_for('guest.room_listing') }}">Rooms & Suites</a>
+              </li>
+              <li><a href="{{ url_for('offers') }}">Special Offers</a></li>
+              <li><a href="{{ url_for('about') }}">About Us</a></li>
+              <li><a href="{{ url_for('contact') }}">Contact</a></li>
+              <li>
+                <a href="{{ url_for('auth.register') }}">Create Account</a>
+              </li>
+            </ul>
+          </div>
+          <div>
+            <div class="footer-heading">Room Types</div>
+            <ul class="footer-links">
+              <li>
+                <a href="{{ url_for('guest.room_listing') }}?type=Single"
+                  >Single Rooms</a
+                >
+              </li>
+              <li>
+                <a href="{{ url_for('guest.room_listing') }}?type=Double"
+                  >Double Rooms</a
+                >
+              </li>
+              <li>
+                <a href="{{ url_for('guest.room_listing') }}?type=Family"
+                  >Family Suites</a
+                >
+              </li>
+              <li>
+                <a href="{{ url_for('guest.room_listing') }}?type=Couple"
+                  >Couple Suites</a
+                >
+              </li>
+              <li>
+                <a href="{{ url_for('guest.room_listing') }}?type=VIP Suite"
+                  >VIP Suites</a
+                >
+              </li>
+            </ul>
+          </div>
+          <div>
+            <div class="footer-heading">Contact Us</div>
+            <ul class="footer-links">
+              <li>📍 123 Marina Beach Road</li>
+              <li>Chennai - 600001, Tamil Nadu</li>
+              <li>📞 +91 44 2345 6789</li>
+              <li>📧 info@blissfulabodes.com</li>
+              <li>🕐 Check-in: 2:00 PM</li>
+              <li>🕛 Check-out: 12:00 PM</li>
+            </ul>
+          </div>
+        </div>
+        <div class="footer-bottom">
+          <span
+            >© {{ current_year }} Blissful Abodes Chennai. All rights
+            reserved.</span
+          >
+          <span
+            >GSTIN: 33AAACB1234F1Z5 |
+            <span style="color: var(--gold)">GST 18% applicable</span></span
+          >
+        </div>
+      </div>
+    </footer>
+    {% endblock %}
+
+    <!-- JavaScript -->
+    <script>
+      // Dark mode
+      function toggleDarkMode() {
+          const body = document.body;
+          const current = body.dataset.theme;
+          const newTheme = current === 'dark' ? 'light' : 'dark';
+          body.dataset.theme = newTheme;
+          localStorage.setItem('theme', newTheme);
+          document.getElementById('darkModeBtn').textContent = newTheme === 'dark' ? '☀️' : '🌙';
+      }
+      // Apply saved theme
+      const savedTheme = localStorage.getItem('theme') || 'light';
+      document.body.dataset.theme = savedTheme;
+      document.addEventListener('DOMContentLoaded', function() {
+          const btn = document.getElementById('darkModeBtn');
+          if (btn) btn.textContent = savedTheme === 'dark' ? '☀️' : '🌙';
+      });
+
+      // Dropdown toggles
+      function toggleUserDropdown() {
+          document.getElementById('userDropdown')?.classList.toggle('show');
+          document.getElementById('notifDropdown')?.classList.remove('show');
+      }
+      function toggleNotifDropdown() {
+          document.getElementById('notifDropdown')?.classList.toggle('show');
+          document.getElementById('userDropdown')?.classList.remove('show');
+      }
+      function toggleMobileNav() {
+          const nav = document.getElementById('mobileNav');
+          nav.style.display = nav.style.display === 'none' ? 'block' : 'none';
+      }
+      document.addEventListener('click', function(e) {
+          if (!e.target.closest('#userMenu')) document.getElementById('userDropdown')?.classList.remove('show');
+          if (!e.target.closest('#notifMenu')) document.getElementById('notifDropdown')?.classList.remove('show');
+      });
+
+      function markAllRead() {
+          fetch('/api/notifications/mark-read', {method:'POST'})
+              .then(() => { document.querySelectorAll('.notif-item.unread').forEach(el => el.classList.remove('unread')); })
+          const badge = document.querySelector('.notif-badge');
+          if (badge) badge.remove();
+      }
+
+      // Flash messages - auto dismiss
+      setTimeout(() => {
+          document.querySelectorAll('.flash-container .alert').forEach(el => {
+              el.style.opacity = '0'; el.style.transform = 'translateX(100%)';
+              setTimeout(() => el.remove(), 300);
+          });
+      }, 5000);
+
+      // Chatbot
+      function toggleChatbot() {
+          const win = document.getElementById('chatbotWindow');
+          win?.classList.toggle('show');
+          if (win?.classList.contains('show')) {
+              loadChatHistory();
+          }
+      }
+      let chatbotHistoryLoaded = false;
+      async function loadChatHistory() {
+          if (chatbotHistoryLoaded) return;
+          chatbotHistoryLoaded = true;
+          const container = document.getElementById('chatMessages');
+          try {
+              const res = await fetch('/api/chatbot/history');
+              const data = await res.json();
+              if (!data.ok) return;
+              const msgs = data.messages || [];
+              container.innerHTML = '';
+              if (!msgs.length) {
+                  addBotMessage("🙏 Namaste! I'm Aria, your AI concierge at Blissful Abodes. How can I help you today?");
+                  return;
+              }
+              msgs.forEach(m => {
+                  if (m.role === 'user') {
+                      addUserMessage(m.content || '');
+                  } else {
+                      const id = addBotMessage('');
+                      updateBotMessage(id, m.content || '');
+                  }
+              });
+          } catch (e) {
+              chatbotHistoryLoaded = false;
+          }
+      }
+      function sendQuickMsg(msg) {
+          sendChatMessage(msg);
+      }
+      function sendChat() {
+          const input = document.getElementById('chatInput');
+          if (!input?.value.trim()) return;
+          const msg = input.value.trim();
+          input.value = '';
+          sendChatMessage(msg);
+      }
+      async function sendChatMessage(msg) {
+          addUserMessage(msg);
+          const placeholderId = addBotMessage('Typing...');
+          try {
+              const res = await fetch('/api/chatbot/message', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ message: msg })
+              });
+              const data = await res.json();
+              if (!data.ok) {
+                  updateBotMessage(placeholderId, data.reply || 'Something went wrong.');
+                  return;
+              }
+              updateBotMessage(placeholderId, data.reply || 'No response.');
+          } catch (e) {
+              updateBotMessage(placeholderId, 'Network error. Please try again.');
+          }
+      }
+      function addUserMessage(text) {
+          const container = document.getElementById('chatMessages');
+          container.innerHTML += `<div class="chat-message user"><div class="message-bubble"></div></div>`;
+          const bubble = container.lastElementChild?.querySelector('.message-bubble');
+          if (bubble) bubble.textContent = text;
+          container.scrollTop = container.scrollHeight;
+      }
+      function addBotMessage(text) {
+          const container = document.getElementById('chatMessages');
+          const id = `bot_${Date.now()}_${Math.floor(Math.random()*1000)}`;
+          container.innerHTML += `<div class="chat-message bot"><div class="message-bubble" id="${id}"></div></div>`;
+          const bubble = document.getElementById(id);
+          if (bubble) bubble.innerHTML = text;
+          container.scrollTop = container.scrollHeight;
+          return id;
+      }
+      function updateBotMessage(id, text) {
+          const bubble = document.getElementById(id);
+          if (bubble) bubble.innerHTML = text;
+          const container = document.getElementById('chatMessages');
+          container.scrollTop = container.scrollHeight;
+      }
+
+      // Language switcher
+      function changeLanguage(lang) {
+          localStorage.setItem('preferredLanguage', lang);
+          // In full implementation: fetch translations and update page
+          if (lang !== 'en') showToast(`Language changed to ${lang === 'hi' ? 'Hindi' : 'Tamil'}`);
+      }
+
+      // Toast
+      function showToast(msg, duration=3000) {
+          let container = document.querySelector('.toast-container');
+          if (!container) {
+              container = document.createElement('div'); container.className = 'toast-container';
+              document.body.appendChild(container);
+          }
+          const toast = document.createElement('div'); toast.className = 'toast';
+          toast.textContent = msg; container.appendChild(toast);
+          setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 300); }, duration);
+      }
+
+      // Real-time data polling
+      {% if current_user and current_user.role in ['admin', 'superadmin', 'staff'] %}
+      setInterval(function() {
+          fetch('/api/rooms/availability')
+              .then(r => r.json())
+              .then(data => {
+                  // Update room cells if present
+                  data.forEach(room => {
+                      const cell = document.querySelector(`.room-cell[data-room="${room.room_number}"]`);
+                      if (cell) {
+                          cell.className = `room-cell ${room.status}`;
+                      }
+                  });
+              }).catch(() => {});
+      }, 30000);
+      {% endif %}
+    </script>
+
+    {% block extra_js %}{% endblock %}
+  </body>
+</html>
+

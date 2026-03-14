@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+{% block title %}Rooms — Blissful Abodes{% endblock %}
+{% block content %}
+<div style="background:var(--gradient-dark);padding:3rem 0;text-align:center;">
+    <h1 style="color:white;margin-bottom:0.5rem;">Our Rooms & Suites</h1>
+    <p style="color:rgba(255,255,255,0.7);">100 exquisitely designed rooms across 7 floors</p>
+</div>
+
+<!-- Filters Bar -->
+<div style="background:white;padding:1.25rem 0;box-shadow:0 2px 10px rgba(0,0,0,0.06);position:sticky;top:70px;z-index:100;">
+    <div class="container">
+        <form method="GET" style="display:flex;gap:1rem;align-items:center;flex-wrap:wrap;">
+            <select name="type" class="form-control" style="width:auto;" onchange="this.form.submit()">
+                <option value="">All Types</option>
+                {% for rt in room_types %}
+                <option value="{{ rt }}" {% if filters.type == rt %}selected{% endif %}>{{ rt }}</option>
+                {% endfor %}
+            </select>
+            <input type="date" name="check_in" class="form-control" value="{{ filters.check_in }}" style="width:auto;" placeholder="Check-in">
+            <input type="date" name="check_out" class="form-control" value="{{ filters.check_out }}" style="width:auto;" placeholder="Check-out">
+            <select name="guests" class="form-control" style="width:auto;">
+                {% for n in range(1, 7) %}
+                <option value="{{ n }}" {% if filters.guests == n %}selected{% endif %}>{{ n }} Guest{{ 's' if n > 1 else '' }}</option>
+                {% endfor %}
+            </select>
+            <select name="max_price" class="form-control" style="width:auto;">
+                <option value="">Any Price</option>
+                <option value="3000" {% if filters.max_price == '3000' %}selected{% endif %}>Under ₹3,000</option>
+                <option value="6000" {% if filters.max_price == '6000' %}selected{% endif %}>Under ₹6,000</option>
+                <option value="10000" {% if filters.max_price == '10000' %}selected{% endif %}>Under ₹10,000</option>
+            </select>
+            <select name="sort" class="form-control" style="width:auto;" onchange="this.form.submit()">
+                <option value="price_asc">Price: Low to High</option>
+                <option value="price_desc">Price: High to Low</option>
+                <option value="rating">Best Rated</option>
+            </select>
+            <button type="submit" class="btn btn-primary">Search</button>
+            <a href="{{ url_for('guest.room_listing') }}" class="btn btn-outline">Clear</a>
+        </form>
+    </div>
+</div>
+
+<!-- Occupancy Indicator -->
+{% if occupancy_pct > 70 %}
+<div style="background:#fff3cd;padding:0.75rem;text-align:center;font-size:0.875rem;border-bottom:1px solid rgba(0,0,0,0.06);">
+    ⚠️ Hotel is {{ occupancy_pct }}% occupied. Limited rooms available — <strong>book now to secure your stay!</strong>
+</div>
+{% endif %}
+
+<!-- Room Listing -->
+<section style="padding:3rem 0;background:var(--bg-cream);">
+    <div class="container">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem;">
+            <div>
+                <h2 style="font-size:1.35rem;">{{ rooms|length }} Rooms Available</h2>
+                <p style="color:var(--text-light);font-size:0.875rem;">{% if filters.type %}{{ filters.type }} rooms only • {% endif %}Prices include AI-powered dynamic pricing</p>
+            </div>
+            <!-- Availability legend -->
+            <div style="display:flex;gap:1rem;font-size:0.8rem;flex-wrap:wrap;">
+                {% for rt, count in type_counts.items() %}
+                <span><span style="font-weight:700;color:{{ 'var(--danger)' if count < 3 else 'var(--success)' }};">{{ count }}</span> {{ rt }}</span>
+                {% endfor %}
+            </div>
+        </div>
+        <div class="rooms-grid">
+            {% for room in rooms %}
+            <div class="room-card">
+                <div class="room-card-image">
+                    {% if room.room_type == 'VIP Suite' %}
+                    {% set fallback_file = 'images/rooms/vip.svg' %}
+                    {% elif room.room_type == 'Couple' %}
+                    {% set fallback_file = 'images/rooms/couple.svg' %}
+                    {% elif room.room_type == 'Family' %}
+                    {% set fallback_file = 'images/rooms/family.svg' %}
+                    {% elif room.room_type == 'Double' %}
+                    {% set fallback_file = 'images/rooms/double.svg' %}
+                    {% else %}
+                    {% set fallback_file = 'images/rooms/single.svg' %}
+                    {% endif %}
+                    {% set fallback_img = url_for('static', filename=fallback_file) %}
+                    {% set primary_img = room.primary_image if room.primary_image else (room.images[0] if room.images and room.images|length > 0 else fallback_img) %}
+                    <img src="{{ primary_img }}" alt="{{ room.room_type }} room" onerror="this.onerror=null;this.src='{{ fallback_img }}';">
+                    <div class="room-badge {% if room.room_type == 'VIP Suite' %}gold{% endif %}">{{ room.room_type }}</div>
+                    {% if room.available_count is defined and room.available_count <= 3 %}
+                    <div style="position:absolute;bottom:1rem;left:1rem;background:rgba(220,53,69,0.9);color:white;padding:0.25rem 0.75rem;border-radius:20px;font-size:0.72rem;font-weight:600;">
+                        🔥 Only {{ room.available_count }} left!
+                    </div>
+                    {% endif %}
+                    {% if room.status == 'occupied' %}
+                    <div style="position:absolute;inset:0;background:rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center;">
+                        <span style="background:rgba(220,53,69,0.9);color:white;padding:0.4rem 1rem;border-radius:20px;font-size:0.85rem;font-weight:600;">Currently Occupied</span>
+                    </div>
+                    {% endif %}
+                    {% if current_user %}
+                    <button class="wishlist-btn" onclick="toggleWishlist(this, '{{ room.room_id }}')" title="Add to wishlist">❤️</button>
+                    {% endif %}
+                </div>
+                <div class="room-card-body">
+                    <h3 class="room-name">{{ room.room_type }} — Room {{ room.room_number }}</h3>
+                    <div style="font-size:0.78rem;color:var(--text-light);margin-bottom:0.5rem;">
+                        Floor {{ room.floor }} • {{ room.view_type or 'Garden View' }} • Max {{ room.max_guests }} guests
+                    </div>
+                    <div class="room-amenities">
+                        {% for a in room.amenities[:4] %}<span class="amenity-tag">{{ a }}</span>{% endfor %}
+                        {% if room.amenities|length > 4 %}<span class="amenity-tag">+{{ room.amenities|length - 4 }}</span>{% endif %}
+                    </div>
+                                        <div class="room-price">
+                        {% if filters.check_in and filters.check_out %}
+                        <span class="price-amount">INR {{ "{:,.0f}".format(room.dynamic_price) }}</span>
+                        <span class="price-per">/night</span>
+                        {% if room.dynamic_price != room.current_price %}
+                        <span class="price-original" style="margin-left:0.5rem;">INR {{ "{:,.0f}".format(room.current_price) }}</span>
+                        {% endif %}
+                        {% else %}
+                        <span class="price-amount">INR {{ "{:,.0f}".format(room.current_price) }}</span>
+                        <span class="price-per">/night (from)</span>
+                        {% endif %}
+                    </div>
+                    {% if filters.check_in and filters.check_out %}
+                    <div style="font-size:0.72rem;color:var(--text-muted);margin-top:0.3rem;">+ 18% GST | No hidden charges</div>
+                    {% else %}
+                    <div style="font-size:0.72rem;color:var(--text-muted);margin-top:0.3rem;">Select dates to see dynamic price</div>
+                    {% endif %}
+                </div>
+                <div class="room-card-footer">
+                    <div>
+                        <div class="viewer-badge">👀 {{ [3,5,8,12,2]|random }} viewing</div>
+                        {% if room.price_rules %}<div style="font-size:0.7rem;color:var(--info);">🤖 AI priced</div>{% endif %}
+                    </div>
+                    <div style="display:flex;gap:0.5rem;">
+                        <a href="{{ url_for('guest.room_detail', room_id=room.room_id) }}" class="btn btn-outline btn-sm">Details</a>
+                        {% if room.status != 'occupied' %}
+                        {% if filters.check_in and filters.check_out %}
+                        <a href="{{ url_for('guest.book_room', room_id=room.room_id, check_in=filters.check_in, check_out=filters.check_out, guests=filters.guests) }}" class="btn btn-primary btn-sm">Book</a>
+                        {% else %}
+                        <a href="{{ url_for('guest.book_room', room_id=room.room_id) }}" class="btn btn-primary btn-sm">Book</a>
+                        {% endif %}
+                        {% else %}
+                        <button class="btn btn-sm" style="background:#ddd;color:#888;cursor:not-allowed;">Occupied</button>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% else %}
+            <div style="grid-column:1/-1;text-align:center;padding:4rem;color:var(--text-light);">
+                <div style="font-size:4rem;margin-bottom:1rem;">🔍</div>
+                <h3>No rooms match your filters</h3>
+                <a href="{{ url_for('guest.room_listing') }}" class="btn btn-primary" style="margin-top:1rem;">Clear Filters</a>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</section>
+<script>
+function toggleWishlist(btn, roomId) {
+    fetch('/api/wishlist/toggle', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({room_id: roomId})})
+        .then(r => r.json()).then(d => {
+            btn.classList.toggle('active', d.action === 'added');
+            showToast(d.action === 'added' ? '❤️ Added to wishlist!' : '💔 Removed from wishlist');
+        });
+}
+</script>
+{% endblock %}
+
+

@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% block title %}ML Analytics - Super Admin{% endblock %}
+{% block content %}
+<div class="dashboard-layout">
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <div style="font-size:2rem;">Super Admin</div>
+      <div class="sidebar-user-name">{{ user.first_name }} {{ user.last_name }}</div>
+      <div class="sidebar-user-role">GOD MODE</div>
+    </div>
+    <ul class="sidebar-nav">
+      <li><a href="{{ url_for('superadmin.dashboard') }}" class="nav-link"><span class="icon"><i class="fa-solid fa-chart-line"></i></span> Dashboard</a></li>
+      <li><a href="{{ url_for('superadmin.audit_logs') }}" class="nav-link"><span class="icon"><i class="fa-solid fa-file-lines"></i></span> Audit Logs</a></li>
+      <li><a href="{{ url_for('superadmin.ml_analytics') }}" class="nav-link active"><span class="icon"><i class="fa-solid fa-brain"></i></span> ML Analytics</a></li>
+      <div class="sidebar-section-title">SYSTEM</div>
+      <li><a href="{{ url_for('auth.logout') }}" class="nav-link"><span class="icon"><i class="fa-solid fa-right-from-bracket"></i></span> Logout</a></li>
+    </ul>
+  </aside>
+
+  <main class="main-content">
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">ML Analytics</h1>
+        <div class="page-subtitle">Forecasts, pricing, and model performance</div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:2fr 1fr;gap:1.5rem;margin-bottom:1.5rem;">
+      <div class="card">
+        <div class="card-header"><span>Demand Forecast (30 Days)</span></div>
+        <div class="card-body"><div class="chart-container" style="height:280px;"><canvas id="forecastChart"></canvas></div></div>
+      </div>
+      <div class="card">
+        <div class="card-header"><span>Sentiment Summary</span></div>
+        <div class="card-body">
+          {% for s in sentiments %}
+          <div style="display:flex;justify-content:space-between;padding:0.5rem 0;">
+            <span>{{ s.sentiment|title }}</span>
+            <strong>{{ s.cnt }}</strong>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:1.5rem;">
+      <div class="card-header"><span>AI Modules (Explainable Views)</span></div>
+      <div class="card-body">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:1rem;">
+          <div>
+            <div style="font-weight:600;margin-bottom:0.35rem;">Fraud Detection</div>
+            <img src="{{ url_for('static', filename='images/ai/ai_fraud_detection.svg') }}" alt="Fraud detection model" style="width:100%;border-radius:12px;border:1px solid rgba(0,0,0,0.06);background:white;">
+          </div>
+          <div>
+            <div style="font-weight:600;margin-bottom:0.35rem;">Demand Forecasting</div>
+            <img src="{{ url_for('static', filename='images/ai/ai_demand_forecast.svg') }}" alt="Demand forecasting model" style="width:100%;border-radius:12px;border:1px solid rgba(0,0,0,0.06);background:white;">
+          </div>
+          <div>
+            <div style="font-weight:600;margin-bottom:0.35rem;">Dynamic Pricing</div>
+            <img src="{{ url_for('static', filename='images/ai/ai_dynamic_pricing.svg') }}" alt="Dynamic pricing model" style="width:100%;border-radius:12px;border:1px solid rgba(0,0,0,0.06);background:white;">
+          </div>
+          <div>
+            <div style="font-weight:600;margin-bottom:0.35rem;">Cancellation Prediction</div>
+            <img src="{{ url_for('static', filename='images/ai/ai_cancellation.svg') }}" alt="Cancellation prediction model" style="width:100%;border-radius:12px;border:1px solid rgba(0,0,0,0.06);background:white;">
+          </div>
+          <div>
+            <div style="font-weight:600;margin-bottom:0.35rem;">Hybrid Recommendation</div>
+            <img src="{{ url_for('static', filename='images/ai/ai_recommender.svg') }}" alt="Hybrid recommendation model" style="width:100%;border-radius:12px;border:1px solid rgba(0,0,0,0.06);background:white;">
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card" style="margin-bottom:1.5rem;">
+      <div class="card-header"><span>Dynamic Pricing Snapshot</span></div>
+      <div class="table-container">
+        <table class="data-table">
+          <thead><tr><th>Room Type</th><th>Base</th><th>Multiplier</th><th>Final</th><th>Rules</th></tr></thead>
+          <tbody>
+            {% for rt, data in prices.items() %}
+            <tr>
+              <td>{{ rt }}</td>
+              <td>INR {{ "{:,.0f}".format(data.base_price) }}</td>
+              <td>{{ data.multiplier }}</td>
+              <td>INR {{ "{:,.0f}".format(data.final_price) }}</td>
+              <td style="font-size:0.8rem;color:var(--text-light);">{{ ', '.join(data.rules_applied) if data.rules_applied else 'Standard' }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><span>Model Metrics</span></div>
+      <div class="table-container">
+        <table class="data-table">
+          <thead><tr><th>Model</th><th>Algorithm</th><th>Accuracy</th><th>Status</th></tr></thead>
+          <tbody>
+            {% for m in model_metrics %}
+            <tr>
+              <td>{{ m.name }}</td>
+              <td>{{ m.algorithm }}</td>
+              <td>{{ m.accuracy }}</td>
+              <td>{{ m.status }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+const forecast = {{ forecast | tojson }};
+new Chart(document.getElementById('forecastChart').getContext('2d'), {
+  type: 'line',
+  data: {
+    labels: forecast.map(f => f.date),
+    datasets: [{
+      label: 'Predicted Bookings',
+      data: forecast.map(f => f.predicted_bookings || 0),
+      borderColor: '#FF6B35',
+      backgroundColor: 'rgba(255,107,53,0.12)',
+      fill: true,
+      tension: 0.35
+    }]
+  },
+  options: {responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}}
+});
+</script>
+{% endblock %}
+

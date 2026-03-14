@@ -1,0 +1,79 @@
+﻿{% extends "base.html" %}
+{% block title %}Shift Management - Manager{% endblock %}
+{% block content %}
+<div class="dashboard-layout">
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <div style="font-size:2rem;">Manager</div>
+      <div class="sidebar-user-name">{{ user.first_name }} {{ user.last_name }}</div>
+      <div class="sidebar-user-role">{{ user.department or 'Manager' }}</div>
+    </div>
+    <ul class="sidebar-nav">
+      <li><a href="{{ url_for('manager.dashboard') }}" class="nav-link"><span class="icon"><i class="fa-solid fa-chart-line"></i></span> Dashboard</a></li>
+      <li><a href="{{ url_for('manager.shift_management') }}" class="nav-link active"><span class="icon"><i class="fa-solid fa-calendar-days"></i></span> Shifts</a></li>
+      <li><a href="{{ url_for('manager.inventory_management') }}" class="nav-link"><span class="icon"><i class="fa-solid fa-boxes-stacked"></i></span> Inventory</a></li>
+      <li><a href="{{ url_for('manager.task_management') }}" class="nav-link"><span class="icon"><i class="fa-solid fa-list-check"></i></span> Tasks</a></li>
+      <div class="sidebar-section-title">SYSTEM</div>
+      <li><a href="{{ url_for('auth.logout') }}" class="nav-link"><span class="icon"><i class="fa-solid fa-right-from-bracket"></i></span> Logout</a></li>
+    </ul>
+  </aside>
+
+  <main class="main-content">
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">Shift Scheduling</h1>
+        <div class="page-subtitle">Plan staff shifts for the next 7 days</div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:1.5rem;">
+      <div class="card-header"><span>Create Shift</span></div>
+      <div class="card-body">
+        <form method="POST" style="display:grid;grid-template-columns:repeat(5,1fr);gap:1rem;">
+          <div class="form-group"><label class="form-label">Staff</label>
+            <select name="staff_id" class="form-control">
+              {% for s in staff_list %}
+              <option value="{{ s.user_id }}">{{ s.first_name }} {{ s.last_name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="form-group"><label class="form-label">Date</label><input type="date" name="date" class="form-control" required></div>
+          <div class="form-group"><label class="form-label">Shift</label>
+            <select name="shift_type" class="form-control">
+              <option>morning</option>
+              <option>afternoon</option>
+              <option>night</option>
+            </select>
+          </div>
+          <div class="form-group"><label class="form-label">Start</label><input type="time" name="start_time" class="form-control"></div>
+          <div class="form-group"><label class="form-label">End</label><input type="time" name="end_time" class="form-control"></div>
+          <div class="form-group" style="grid-column:1/-1;">
+            <button class="btn btn-primary">Add Shift</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><span>Upcoming Shifts</span></div>
+      <div class="table-container">
+        <table class="data-table">
+          <thead><tr><th>Date</th><th>Staff</th><th>Department</th><th>Shift</th><th>Time</th><th>Status</th></tr></thead>
+          <tbody>
+            {% for s in shifts %}
+            <tr>
+              <td>{{ s.date }}</td>
+              <td>{{ s.first_name }} {{ s.last_name }}</td>
+              <td>{{ s.department }}</td>
+              <td>{{ s.shift_type|title }}</td>
+              <td>{{ s.start_time or '-' }} - {{ s.end_time or '-' }}</td>
+              <td><span class="badge badge-info">{{ s.status|title }}</span></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+</div>
+{% endblock %}

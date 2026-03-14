@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Login — Blissful Abodes{% endblock %}
+{% block content %}
+<div style="min-height:100vh;display:flex;background:var(--gradient-hero);padding:2rem;">
+    <div style="max-width:440px;width:100%;margin:auto;background:white;border-radius:24px;padding:2.5rem;box-shadow:var(--shadow-xl);">
+        <div style="text-align:center;margin-bottom:2rem;">
+            <div style="font-size:3rem;margin-bottom:0.75rem;">🏨</div>
+            <h1 style="font-size:1.75rem;color:var(--text-dark);">Welcome Back!</h1>
+            <p style="color:var(--text-light);font-size:0.9rem;">Sign in to your Blissful Abodes account</p>
+        </div>
+        
+        <form method="POST" action="{{ url_for('auth.login') }}">
+            <div class="form-group">
+                <label class="form-label">Email Address</label>
+                <div class="input-icon">
+                    <span class="icon">📧</span>
+                    <input type="email" name="email" class="form-control" placeholder="your@email.com" required>
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="form-label" style="display:flex;justify-content:space-between;">
+                    Password <a href="{{ url_for('auth.forgot_password') }}" style="color:var(--primary);font-weight:400;font-size:0.8rem;">Forgot password?</a>
+                </label>
+                <div class="input-icon">
+                    <span class="icon">🔒</span>
+                    <input type="password" name="password" id="passwordField" class="form-control" placeholder="Enter password" required>
+                </div>
+                <button type="button" onclick="document.getElementById('passwordField').type = document.getElementById('passwordField').type === 'password' ? 'text' : 'password'" style="background:none;border:none;font-size:0.75rem;color:var(--text-light);margin-top:0.3rem;cursor:pointer;">👁️ Show/Hide</button>
+            </div>
+            <button type="submit" class="btn btn-primary btn-block btn-lg">🚀 Sign In</button>
+        </form>
+        
+        <div style="text-align:center;margin:1.5rem 0;position:relative;">
+            <span style="background:white;padding:0 1rem;color:var(--text-muted);font-size:0.85rem;position:relative;z-index:1;">or sign in as</span>
+            <div style="position:absolute;top:50%;left:0;right:0;height:1px;background:rgba(0,0,0,0.1);"></div>
+        </div>
+        
+        <!-- Quick Login Buttons for Demo -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;margin-bottom:1.5rem;">
+            <button onclick="loginAs('vikram@blissfulabodes.com','Admin@123')" class="btn btn-sm" style="background:rgba(220,53,69,0.1);color:var(--danger);border:1px solid rgba(220,53,69,0.2);">🔴 Super Admin</button>
+            <button onclick="loginAs('anil@blissfulabodes.com','Admin@123')" class="btn btn-sm" style="background:rgba(255,107,53,0.1);color:var(--primary);border:1px solid rgba(255,107,53,0.2);">🟠 Admin</button>
+            <button onclick="loginAs('suresh@blissfulabodes.com','Staff@123')" class="btn btn-sm" style="background:rgba(255,193,7,0.1);color:#856404;border:1px solid rgba(255,193,7,0.2);">🟡 Manager</button>
+            <button onclick="loginAs('priya@blissfulabodes.com','Staff@123')" class="btn btn-sm" style="background:rgba(40,167,69,0.1);color:var(--success);border:1px solid rgba(40,167,69,0.2);">🟢 Staff</button>
+            <button onclick="loginAs('rajesh@example.com','Guest@123')" class="btn btn-sm" style="background:rgba(108,117,125,0.1);color:#6c757d;border:1px solid rgba(108,117,125,0.2);grid-column:1/-1;">⚪ Guest Demo</button>
+        </div>
+        
+        <p style="text-align:center;color:var(--text-light);font-size:0.875rem;">
+            Don't have an account? <a href="{{ url_for('auth.register') }}" style="color:var(--primary);font-weight:600;">Register now →</a>
+        </p>
+    </div>
+</div>
+<script>
+function loginAs(email, pwd) {
+    document.querySelector('input[name="email"]').value = email;
+    document.querySelector('input[name="password"]').value = pwd;
+    document.querySelector('form').submit();
+}
+</script>
+{% endblock %}
+{% block footer %}{% endblock %}

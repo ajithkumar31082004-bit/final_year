@@ -1,0 +1,266 @@
+{% extends "base.html" %}
+{% block title %}Admin Dashboard — Blissful Abodes{% endblock %}
+{% block content %}
+<div class="dashboard-layout">
+    <aside class="sidebar">
+        <div class="sidebar-header">
+            <div style="font-size:2rem;">🔑</div>
+            <div class="sidebar-user-name">{{ user.first_name }} {{ user.last_name }}</div>
+            <div class="sidebar-user-role">Administrator</div>
+        </div>
+        <ul class="sidebar-nav">
+            <li><a href="{{ url_for('admin.dashboard') }}" class="nav-link active"><span class="icon">📊</span> Dashboard</a></li>
+            <li><a href="{{ url_for('admin.bookings') }}" class="nav-link"><span class="icon">📋</span> Bookings</a></li>
+            <li><a href="{{ url_for('admin.user_management') }}" class="nav-link"><span class="icon">👥</span> Users</a></li>
+            <li><a href="{{ url_for('admin.room_management') }}" class="nav-link"><span class="icon">🛏️</span> Rooms</a></li>
+            <li><a href="{{ url_for('admin.analytics') }}" class="nav-link"><span class="icon">📈</span> Analytics</a></li>
+            <li><a href="{{ url_for('admin.review_management') }}" class="nav-link"><span class="icon">⭐</span> Reviews</a></li>
+            <div class="sidebar-section-title">SYSTEM</div>
+            <li><a href="{{ url_for('auth.logout') }}" class="nav-link"><span class="icon">🚪</span> Logout</a></li>
+        </ul>
+    </aside>
+    
+    <main class="main-content">
+        <div class="page-header">
+            <div>
+                <h1 class="page-title">Admin Dashboard</h1>
+                <div class="page-subtitle">Hotel performance overview & management</div>
+            </div>
+            <div style="display:flex;gap:0.75rem;">
+                <select onchange="if(this.value)window.location='/admin/bookings?status='+this.value" class="form-control" style="width:auto;padding:0.5rem 1rem;">
+                    <option value="">Filter Bookings</option>
+                    <option value="confirmed">Confirmed</option>
+                    <option value="completed">Completed</option>
+                    <option value="cancelled">Cancelled</option>
+                </select>
+                <button onclick="document.getElementById('couponModal').classList.add('show')" class="btn btn-gold">🎁 New Coupon</button>
+            </div>
+        </div>
+        
+        <!-- KPI Cards -->
+        <div class="stats-grid" style="margin-bottom:1.75rem;">
+            <div class="stat-card orange">
+                <div class="stat-icon orange">💰</div>
+                <div><div class="stat-value">₹{{ "{:,.0f}".format(kpis.monthly_revenue) }}</div><div class="stat-label">Monthly Revenue</div><div class="stat-trend up">↑ 12% MoM</div></div>
+            </div>
+            <div class="stat-card danger">
+                <div class="stat-icon danger">🏨</div>
+                <div><div class="stat-value">{{ kpis.occupancy_rate }}%</div><div class="stat-label">Occupancy Rate</div></div>
+            </div>
+            <div class="stat-card success">
+                <div class="stat-icon success">📋</div>
+                <div><div class="stat-value">{{ kpis.total_bookings }}</div><div class="stat-label">Total Bookings</div></div>
+            </div>
+            <div class="stat-card gold">
+                <div class="stat-icon gold">⭐</div>
+                <div><div class="stat-value">{{ kpis.avg_rating }}</div><div class="stat-label">Avg Guest Rating</div></div>
+            </div>
+            <div class="stat-card info">
+                <div class="stat-icon info">👥</div>
+                <div><div class="stat-value">{{ kpis.total_guests }}</div><div class="stat-label">Registered Guests</div></div>
+            </div>
+            <div class="stat-card orange">
+                <div class="stat-icon orange">💎</div>
+                <div><div class="stat-value">₹{{ "{:,.0f}".format(kpis.adr) }}</div><div class="stat-label">ADR</div></div>
+            </div>
+        </div>
+        
+        <!-- Revenue Chart + Room Types -->
+        <div style="display:grid;grid-template-columns:2fr 1fr;gap:1.5rem;margin-bottom:1.75rem;">
+            <div class="card">
+                <div class="card-header"><span>📈 Revenue Trend (12 Months)</span></div>
+                <div class="card-body"><div class="chart-container"><canvas id="revenueChart"></canvas></div></div>
+            </div>
+            <div class="card">
+                <div class="card-header"><span>🛏️ Room Type Performance</span></div>
+                <div class="card-body">
+                    {% for rt in room_type_data %}
+                    <div style="margin-bottom:1rem;">
+                        <div style="display:flex;justify-content:space-between;font-size:0.85rem;margin-bottom:0.3rem;">
+                            <span>{{ rt.type }}</span>
+                            <span style="color:var(--primary);font-weight:600;">{{ rt.occupancy }}%</span>
+                        </div>
+                        <div class="progress-bar" style="height:6px;background:rgba(0,0,0,0.08);">
+                            <div class="progress-fill" style="width:{{ rt.occupancy }}%;"></div>
+                        </div>
+                        <div style="font-size:0.75rem;color:var(--text-light);margin-top:0.2rem;">₹{{ "{:,.0f}".format(rt.revenue) }} revenue</div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        
+        <!-- AI Insights + Demand Forecast -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin-bottom:1.75rem;">
+            <div class="card">
+                <div class="card-header" style="background:var(--gradient-primary);color:white;"><span>🤖 AI Insights</span></div>
+                <div class="card-body">
+                    {% for insight in insights %}
+                    <div style="padding:0.75rem;background:var(--bg-cream);border-radius:10px;margin-bottom:0.6rem;font-size:0.875rem;">{{ insight }}</div>
+                    {% endfor %}
+                    
+                    <div style="margin-top:1rem;padding:1rem;border-radius:12px;background:rgba(23,162,184,0.08);border-left:4px solid var(--info);">
+                        <div style="font-weight:600;font-size:0.85rem;color:var(--info);">💬 Sentiment Summary</div>
+                        <div style="display:flex;gap:1rem;margin-top:0.75rem;">
+                            <div style="text-align:center;flex:1;"><div style="font-size:1.5rem;font-weight:700;color:var(--success);">{{ sentiment_summary.positive_pct }}%</div><div style="font-size:0.75rem;color:var(--text-light);">Positive</div></div>
+                            <div style="text-align:center;flex:1;"><div style="font-size:1.5rem;font-weight:700;color:var(--danger);">{{ sentiment_summary.negative }}</div><div style="font-size:0.75rem;color:var(--text-light);">Negative</div></div>
+                            <div style="text-align:center;flex:1;"><div style="font-size:1.5rem;font-weight:700;color:var(--text-medium);">{{ sentiment_summary.neutral }}</div><div style="font-size:0.75rem;color:var(--text-light);">Neutral</div></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card">
+                <div class="card-header"><span>📅 Demand Forecast (7-Day)</span></div>
+                <div class="card-body"><div class="chart-container"><canvas id="forecastChart"></canvas></div></div>
+            </div>
+        </div>
+
+        <div class="card" style="margin-bottom:1.75rem;">
+            <div class="card-header"><span>AI Modules (Explainable Views)</span></div>
+            <div class="card-body">
+                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:1rem;">
+                    <div>
+                        <div style="font-weight:600;margin-bottom:0.35rem;">Fraud Detection</div>
+                        <img src="{{ url_for('static', filename='images/ai/ai_fraud_detection.svg') }}" alt="Fraud detection model" style="width:100%;border-radius:12px;border:1px solid rgba(0,0,0,0.06);background:white;">
+                    </div>
+                    <div>
+                        <div style="font-weight:600;margin-bottom:0.35rem;">Demand Forecasting</div>
+                        <img src="{{ url_for('static', filename='images/ai/ai_demand_forecast.svg') }}" alt="Demand forecasting model" style="width:100%;border-radius:12px;border:1px solid rgba(0,0,0,0.06);background:white;">
+                    </div>
+                    <div>
+                        <div style="font-weight:600;margin-bottom:0.35rem;">Dynamic Pricing</div>
+                        <img src="{{ url_for('static', filename='images/ai/ai_dynamic_pricing.svg') }}" alt="Dynamic pricing model" style="width:100%;border-radius:12px;border:1px solid rgba(0,0,0,0.06);background:white;">
+                    </div>
+                    <div>
+                        <div style="font-weight:600;margin-bottom:0.35rem;">Cancellation Prediction</div>
+                        <img src="{{ url_for('static', filename='images/ai/ai_cancellation.svg') }}" alt="Cancellation prediction model" style="width:100%;border-radius:12px;border:1px solid rgba(0,0,0,0.06);background:white;">
+                    </div>
+                    <div>
+                        <div style="font-weight:600;margin-bottom:0.35rem;">Hybrid Recommendation</div>
+                        <img src="{{ url_for('static', filename='images/ai/ai_recommender.svg') }}" alt="Hybrid recommendation model" style="width:100%;border-radius:12px;border:1px solid rgba(0,0,0,0.06);background:white;">
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- Recent Bookings -->
+        <div class="card" style="margin-bottom:1.75rem;">
+            <div class="card-header">
+                <span>📋 Recent Bookings</span>
+                <a href="{{ url_for('admin.bookings') }}" class="btn btn-sm btn-outline">View All</a>
+            </div>
+            <div class="table-container">
+            <table class="data-table">
+                <thead><tr><th>Booking ID</th><th>Guest</th><th>Room</th><th>Check-in</th><th>Amount</th><th>Status</th><th>Payment</th></tr></thead>
+                <tbody>
+                {% for b in recent_bookings %}
+                <tr class="{% if b.is_flagged %}' style='background:rgba(220,53,69,0.03){% endif %}">
+                    <td style="font-family:monospace;font-size:0.8rem;">{{ b.booking_id }}</td>
+                    <td>{{ b.first_name }} {{ b.last_name }}</td>
+                    <td>{{ b.room_type }}</td>
+                    <td>{{ b.check_in }}</td>
+                    <td>₹{{ "{:,.0f}".format(b.total_amount) }}</td>
+                    <td><span class="badge badge-{{ 'success' if b.status == 'confirmed' else 'info' if b.status == 'completed' else 'danger' }}">{{ b.status|title }}</span></td>
+                    <td><span class="badge badge-{{ 'success' if b.payment_status == 'paid' else 'warning' }}">{{ b.payment_status|title }}</span></td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            </div>
+        </div>
+        
+        <!-- Flagged + Inventory Alerts -->
+        {% if flagged_bookings or inventory_alerts %}
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;">
+            {% if flagged_bookings %}
+            <div class="card">
+                <div class="card-header" style="background:rgba(220,53,69,0.08);"><span>🚨 Flagged Bookings ({{ flagged_bookings|length }})</span></div>
+                <div class="card-body">
+                    {% for b in flagged_bookings %}
+                    <div style="padding:0.75rem;background:#fff5f5;border-radius:10px;margin-bottom:0.5rem;border-left:3px solid var(--danger);">
+                        <div style="font-size:0.85rem;font-weight:600;">{{ b.booking_id }}</div>
+                        <div style="font-size:0.8rem;color:var(--danger);">⚠️ Fraud score: {{ "%.0f"|format(b.fraud_score * 100) }}%</div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+            {% if inventory_alerts %}
+            <div class="card">
+                <div class="card-header" style="background:rgba(255,193,7,0.1);"><span>📦 Low Stock Alerts ({{ inventory_alerts|length }})</span></div>
+                <div class="card-body">
+                    {% for item in inventory_alerts %}
+                    <div style="display:flex;justify-content:space-between;padding:0.5rem 0;border-bottom:1px solid rgba(0,0,0,0.05);">
+                        <span style="font-size:0.875rem;">{{ item.name }}</span>
+                        <span class="badge badge-danger">{{ item.stock_count }} left</span>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
+    </main>
+</div>
+
+<!-- Create Coupon Modal -->
+<div class="modal-overlay" id="couponModal">
+    <div class="modal">
+        <div class="modal-header">
+            <h3 class="modal-title">🎁 Create Coupon</h3>
+            <button class="modal-close" onclick="document.getElementById('couponModal').classList.remove('show')">&times;</button>
+        </div>
+        <form method="POST" action="{{ url_for('admin.create_coupon') }}">
+            <div class="form-group"><label class="form-label">Coupon Code</label><input type="text" name="code" class="form-control" placeholder="SUMMER25" required style="text-transform:uppercase;"></div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+                <div class="form-group"><label class="form-label">Type</label><select name="discount_type" class="form-control"><option value="percentage">Percentage (%)</option><option value="flat">Flat (₹)</option></select></div>
+                <div class="form-group"><label class="form-label">Value</label><input type="number" name="discount_value" class="form-control" placeholder="10" min="1" required></div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+                <div class="form-group"><label class="form-label">Max Uses</label><input type="number" name="max_uses" class="form-control" value="100"></div>
+                <div class="form-group"><label class="form-label">Valid Until</label><input type="date" name="valid_until" class="form-control"></div>
+            </div>
+            <div class="form-group"><label class="form-label">Min. Booking Amount (₹)</label><input type="number" name="min_amount" class="form-control" placeholder="0"></div>
+            <button type="submit" class="btn btn-primary btn-block">Create Coupon</button>
+        </form>
+    </div>
+</div>
+
+<script>
+const revenueData = {{ revenue_chart | tojson }};
+const forecastData = {{ forecast | tojson }};
+
+new Chart(document.getElementById('revenueChart').getContext('2d'), {
+    type: 'line',
+    data: {
+        labels: revenueData.map(d => d.month),
+        datasets: [{
+            label: 'Revenue (₹)',
+            data: revenueData.map(d => d.revenue),
+            borderColor: '#FF6B35', backgroundColor: 'rgba(255,107,53,0.08)',
+            fill: true, tension: 0.4, pointRadius: 5, pointHoverRadius: 7,
+            borderWidth: 2.5
+        }]
+    },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
+               scales: { y: { ticks: { callback: v => '₹' + (v/1000).toFixed(0) + 'K' } } } }
+});
+
+new Chart(document.getElementById('forecastChart').getContext('2d'), {
+    type: 'bar',
+    data: {
+        labels: forecastData.map(d => d.date || new Date(Date.now() + (forecastData.indexOf(d))*86400000).toLocaleDateString('en-IN', {month:'short',day:'numeric'})),
+        datasets: [{
+            label: 'Predicted Occupancy %',
+            data: forecastData.map(d => d.occupancy_forecast || d.predicted_occupancy || 60),
+            backgroundColor: ctx => ctx.raw > 75 ? 'rgba(220,53,69,0.7)' : ctx.raw > 50 ? 'rgba(255,193,7,0.7)' : 'rgba(40,167,69,0.7)',
+            borderRadius: 6,
+        }]
+    },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
+               scales: { y: { max: 100, ticks: { callback: v => v + '%' } } } }
+});
+</script>
+{% endblock %}
+
+

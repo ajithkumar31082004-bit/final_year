@@ -1,0 +1,72 @@
+﻿{% extends "base.html" %}
+{% block title %}Tasks - Manager{% endblock %}
+{% block content %}
+<div class="dashboard-layout">
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <div style="font-size:2rem;">Manager</div>
+      <div class="sidebar-user-name">{{ user.first_name }} {{ user.last_name }}</div>
+      <div class="sidebar-user-role">{{ user.department or 'Manager' }}</div>
+    </div>
+    <ul class="sidebar-nav">
+      <li><a href="{{ url_for('manager.dashboard') }}" class="nav-link"><span class="icon"><i class="fa-solid fa-chart-line"></i></span> Dashboard</a></li>
+      <li><a href="{{ url_for('manager.shift_management') }}" class="nav-link"><span class="icon"><i class="fa-solid fa-calendar-days"></i></span> Shifts</a></li>
+      <li><a href="{{ url_for('manager.inventory_management') }}" class="nav-link"><span class="icon"><i class="fa-solid fa-boxes-stacked"></i></span> Inventory</a></li>
+      <li><a href="{{ url_for('manager.task_management') }}" class="nav-link active"><span class="icon"><i class="fa-solid fa-list-check"></i></span> Tasks</a></li>
+      <div class="sidebar-section-title">SYSTEM</div>
+      <li><a href="{{ url_for('auth.logout') }}" class="nav-link"><span class="icon"><i class="fa-solid fa-right-from-bracket"></i></span> Logout</a></li>
+    </ul>
+  </aside>
+
+  <main class="main-content">
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">Housekeeping Tasks</h1>
+        <div class="page-subtitle">Assign and track task completion</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="table-container">
+        <table class="data-table">
+          <thead><tr><th>Room</th><th>Type</th><th>Priority</th><th>Assigned</th><th>Status</th><th>Assign</th></tr></thead>
+          <tbody>
+            {% for t in tasks %}
+            <tr>
+              <td>{{ t.room_number }}</td>
+              <td>{{ t.task_type|title }}</td>
+              <td><span class="badge badge-{{ 'danger' if t.priority == 'urgent' else 'warning' if t.priority == 'high' else 'info' }}">{{ t.priority|title }}</span></td>
+              <td>{{ t.first_name or 'Unassigned' }} {{ t.last_name or '' }}</td>
+              <td><span class="badge badge-{{ 'success' if t.status == 'completed' else 'warning' if t.status == 'in_progress' else 'info' }}">{{ t.status|title }}</span></td>
+              <td>
+                <select id="assign_{{ t.task_id }}" class="form-control" style="width:auto;display:inline-block;">
+                  <option value="">Select staff</option>
+                  {% for s in staff %}
+                  <option value="{{ s.user_id }}">{{ s.first_name }} {{ s.last_name }}</option>
+                  {% endfor %}
+                </select>
+                <button class="btn btn-sm btn-primary" onclick="assignTask('{{ t.task_id }}')">Assign</button>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+function assignTask(taskId) {
+  const select = document.getElementById(`assign_${taskId}`);
+  if (!select || !select.value) return;
+  fetch('/api/manager/task/assign', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({task_id: taskId, staff_id: select.value})
+  }).then(r => r.json()).then(d => {
+    if (d.success) location.reload();
+  });
+}
+</script>
+{% endblock %}

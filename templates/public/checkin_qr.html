@@ -1,0 +1,32 @@
+﻿{% extends "base.html" %}
+{% block title %}Express Check-in - Blissful Abodes{% endblock %}
+{% block content %}
+<div style="background:var(--gradient-dark);padding:3rem 0;text-align:center;">
+  <h1 style="color:white;font-family:var(--font-heading);">Express Check-in</h1>
+  <p style="color:rgba(255,255,255,0.7);">Scan QR at the front desk to complete check-in</p>
+</div>
+<section style="padding:3.5rem 0;background:var(--bg-cream);">
+  <div class="container-sm">
+    <div class="card">
+      <div class="card-header"><span>Booking Details</span></div>
+      <div class="card-body">
+        {% if booking %}
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+          <div><strong>Booking ID:</strong> {{ booking.booking_id }}</div>
+          <div><strong>Guest:</strong> {{ booking.first_name }} {{ booking.last_name }}</div>
+          <div><strong>Room:</strong> {{ booking.room_number }} ({{ booking.room_type }})</div>
+          <div><strong>Phone:</strong> {{ booking.phone }}</div>
+          <div><strong>Check-in:</strong> {{ booking.check_in }}</div>
+          <div><strong>Check-out:</strong> {{ booking.check_out }}</div>
+        </div>
+        <div style="margin-top:1.5rem;padding:1rem;background:rgba(40,167,69,0.08);border-radius:12px;">
+          Please show a valid government ID at the front desk to complete check-in.
+        </div>
+        {% else %}
+        <div style="text-align:center;color:var(--text-light);">Booking not found.</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</section>
+{% endblock %}

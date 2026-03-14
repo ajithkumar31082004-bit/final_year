@@ -1,0 +1,271 @@
+{% extends "base.html" %}
+{% block title %}Manager Dashboard — Blissful Abodes{% endblock %}
+{% block content %}
+<div class="dashboard-layout">
+    <aside class="sidebar">
+        <div class="sidebar-header">
+            <div style="font-size:2rem;">🎯</div>
+            <div class="sidebar-user-name">{{ user.first_name }} {{ user.last_name }}</div>
+            <div class="sidebar-user-role">{{ user.department or 'Manager' }}</div>
+        </div>
+        <ul class="sidebar-nav">
+            <li><a href="{{ url_for('manager.dashboard') }}" class="nav-link active"><span class="icon">📊</span> Dashboard</a></li>
+            <li><a href="{{ url_for('manager.shift_management') }}" class="nav-link"><span class="icon">📅</span> Shift Management</a></li>
+            <li><a href="{{ url_for('manager.inventory_management') }}" class="nav-link"><span class="icon">📦</span> Inventory</a></li>
+            <li><a href="{{ url_for('manager.task_management') }}" class="nav-link"><span class="icon">✅</span> Task Board</a></li>
+            <div class="sidebar-section-title">ACCOUNT</div>
+            <li><a href="{{ url_for('auth.logout') }}" class="nav-link"><span class="icon">🚪</span> Logout</a></li>
+        </ul>
+    </aside>
+
+    <main class="main-content">
+        <div class="page-header">
+            <div><h1 class="page-title">Manager Dashboard</h1><div class="page-subtitle">Team & Operations Oversight</div></div>
+            <a href="{{ url_for('manager.shift_management') }}" class="btn btn-primary">📅 Schedule Shifts</a>
+        </div>
+
+        <!-- KPIs -->
+        <div class="stats-grid" style="margin-bottom:1.75rem;">
+            <div class="stat-card orange"><div class="stat-icon orange">💰</div><div><div class="stat-value">₹{{ "{:,.0f}".format(kpis.today_revenue) }}</div><div class="stat-label">Today's Revenue</div></div></div>
+            <div class="stat-card success"><div class="stat-icon success">🏨</div><div><div class="stat-value">{{ kpis.occupancy }}%</div><div class="stat-label">Occupancy</div></div></div>
+            <div class="stat-card info"><div class="stat-icon info">👥</div><div><div class="stat-value">{{ kpis.staff_count }}</div><div class="stat-label">Active Staff</div></div></div>
+            <div class="stat-card gold"><div class="stat-icon gold">⭐</div><div><div class="stat-value">{{ kpis.avg_rating }}</div><div class="stat-label">Guest Satisfaction</div></div></div>
+            <div class="stat-card warning"><div class="stat-icon" style="background:rgba(255,193,7,0.12);">✅</div><div><div class="stat-value">{{ kpis.tasks_done }}</div><div class="stat-label">Tasks Done Today</div></div></div>
+            <div class="stat-card danger"><div class="stat-icon danger">⏳</div><div><div class="stat-value">{{ kpis.pending_tasks }}</div><div class="stat-label">Pending Tasks</div></div></div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin-bottom:1.75rem;">
+            <!-- Team Performance -->
+            <div class="card">
+                <div class="card-header"><span>👥 Team Performance</span></div>
+                <div class="table-container">
+                <table class="data-table">
+                    <thead><tr><th>Staff</th><th>Dept</th><th>Tasks Done</th><th>Performance</th></tr></thead>
+                    <tbody>
+                    {% for member in team %}
+                    <tr>
+                        <td>{{ member.first_name }} {{ member.last_name }}</td>
+                        <td style="font-size:0.8rem;">{{ member.department or '—' }}</td>
+                        <td>{{ member.done_tasks }}/{{ member.total_tasks }}</td>
+                        <td>
+                            {% set pct = (member.done_tasks / (member.total_tasks or 1) * 100)|int %}
+                            <div style="display:flex;align-items:center;gap:0.5rem;">
+                                <div style="flex:1;height:6px;background:rgba(0,0,0,0.08);border-radius:3px;overflow:hidden;"><div style="width:{{ pct }}%;height:100%;background:var(--primary);border-radius:3px;"></div></div>
+                                <span style="font-size:0.75rem;font-weight:600;">{{ pct }}%</span>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+                </div>
+            </div>
+
+            <!-- Today's Shifts -->
+            <div class="card">
+                <div class="card-header"><span>🕐 Today's Shifts</span><a href="{{ url_for('manager.shift_management') }}" style="font-size:0.8rem;color:var(--primary);">Manage</a></div>
+                <div class="card-body">
+                    {% if shifts %}
+                        {% for shift in shifts %}
+                        <div style="display:flex;justify-content:space-between;align-items:center;padding:0.7rem;background:var(--bg-cream);border-radius:10px;margin-bottom:0.5rem;">
+                            <div>
+                                <div style="font-weight:600;font-size:0.875rem;">{{ shift.first_name }} {{ shift.last_name }}</div>
+                                <div style="font-size:0.75rem;color:var(--text-light);">{{ shift.shift_type|title }}</div>
+                            </div>
+                            <div style="text-align:right;">
+                                <div style="font-size:0.8rem;">{{ shift.start_time }} - {{ shift.end_time }}</div>
+                                <span class="badge badge-success">{{ shift.status|title }}</span>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                    <div style="text-align:center;padding:2rem;color:var(--text-light);">No shifts scheduled today</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Booking Monitoring -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin-bottom:1.75rem;">
+            <div class="card">
+                <div class="card-header"><span>🧾 Today's Bookings ({{ today_bookings|length }})</span></div>
+                {% if today_bookings %}
+                <div class="table-container">
+                <table class="data-table">
+                    <thead><tr><th>Booking</th><th>Guest</th><th>Room</th><th>Status</th><th>Update</th></tr></thead>
+                    <tbody>
+                    {% for b in today_bookings %}
+                    <tr>
+                        <td>{{ b.booking_id }}</td>
+                        <td>{{ b.first_name }} {{ b.last_name }}</td>
+                        <td>{{ b.room_number }} ({{ b.room_type }})</td>
+                        <td><span class="badge badge-{{ 'success' if b.status == 'confirmed' else 'warning' if b.status == 'pending' else 'danger' }}">{{ b.status|title }}</span></td>
+                        <td>
+                            <select id="bookingStatus_{{ b.booking_id }}" class="form-control" style="width:auto;display:inline-block;">
+                                <option value="pending" {% if b.status == 'pending' %}selected{% endif %}>Pending</option>
+                                <option value="confirmed" {% if b.status == 'confirmed' %}selected{% endif %}>Confirmed</option>
+                                <option value="completed" {% if b.status == 'completed' %}selected{% endif %}>Completed</option>
+                                <option value="cancelled" {% if b.status == 'cancelled' %}selected{% endif %}>Cancelled</option>
+                            </select>
+                            <button class="btn btn-sm btn-primary" onclick="updateBookingStatus('{{ b.booking_id }}')">Save</button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+                </div>
+                {% else %}
+                <div style="padding:2rem;text-align:center;color:var(--text-light);">No bookings today</div>
+                {% endif %}
+            </div>
+
+            <div class="card">
+                <div class="card-header"><span>📘 Recent Bookings</span></div>
+                {% if bookings %}
+                <div class="table-container">
+                <table class="data-table">
+                    <thead><tr><th>Booking</th><th>Guest</th><th>Room</th><th>Dates</th><th>Status</th></tr></thead>
+                    <tbody>
+                    {% for b in bookings %}
+                    <tr>
+                        <td>{{ b.booking_id }}</td>
+                        <td>{{ b.first_name }} {{ b.last_name }}</td>
+                        <td>{{ b.room_number }} ({{ b.room_type }})</td>
+                        <td style="font-size:0.75rem;">{{ b.check_in }} → {{ b.check_out }}</td>
+                        <td><span class="badge badge-{{ 'success' if b.status == 'confirmed' else 'warning' if b.status == 'pending' else 'danger' }}">{{ b.status|title }}</span></td>
+                    </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+                </div>
+                {% else %}
+                <div style="padding:2rem;text-align:center;color:var(--text-light);">No recent bookings</div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Room Management -->
+        <div class="card" style="margin-bottom:1.75rem;">
+            <div class="card-header">
+                <span>🏨 Room Management</span>
+                <div style="display:flex;gap:0.75rem;font-size:0.75rem;flex-wrap:wrap;">
+                    <span style="color:var(--success);">🟢 Available</span>
+                    <span style="color:var(--danger);">🔴 Occupied</span>
+                    <span style="color:#856404">🟡 Cleaning</span>
+                    <span style="color:var(--info);">🔵 Maintenance</span>
+                    <span style="color:#8a6d3b">🟤 Reserved</span>
+                </div>
+            </div>
+            <div class="card-body">
+                {% for floor, rooms in rooms_by_floor.items() %}
+                <div class="floor-label">Floor {{ floor }}</div>
+                <div class="room-grid-container" style="margin-bottom:1rem;">
+                    {% for room in rooms %}
+                    <div class="room-cell {{ room.status }}" data-room="{{ room.room_number }}"
+                         onclick="openManagerRoomModal('{{ room.room_number }}', '{{ room.status }}', '{{ room.room_type }}')"
+                         title="{{ room.room_number }} — {{ room.room_type }} — {{ room.status|title }}">
+                        <div style="font-size:0.7rem;font-weight:700;">{{ room.room_number }}</div>
+                        <div style="font-size:0.6rem;opacity:0.75;">{{ room.status[:4]|title }}</div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Low Stock + Low Reviews -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;">
+            {% if low_stock %}
+            <div class="card">
+                <div class="card-header" style="background:rgba(255,193,7,0.08);"><span>📦 Low Stock Alert ({{ low_stock|length }})</span><a href="{{ url_for('manager.inventory_management') }}" style="font-size:0.8rem;color:var(--primary);">Manage</a></div>
+                <div class="card-body">
+                    {% for item in low_stock %}
+                    <div style="display:flex;justify-content:space-between;align-items:center;padding:0.5rem 0;border-bottom:1px solid rgba(0,0,0,0.05);">
+                        <span style="font-size:0.875rem;">{{ item.name }}</span>
+                        <div style="display:flex;align-items:center;gap:0.5rem;">
+                            <span class="badge badge-danger">{{ item.stock_count }} left</span>
+                            <button class="btn btn-sm btn-outline" onclick="reorderItem('{{ item.item_id }}')">Reorder</button>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            {% if low_reviews %}
+            <div class="card">
+                <div class="card-header" style="background:rgba(220,53,69,0.06);"><span>⭐ Poor Reviews (Needs Attention)</span></div>
+                <div class="card-body">
+                    {% for review in low_reviews %}
+                    <div style="padding:0.75rem;background:#fff5f5;border-radius:10px;border-left:3px solid var(--danger);margin-bottom:0.5rem;">
+                        <div style="display:flex;justify-content:space-between;">
+                            <span style="font-weight:600;font-size:0.85rem;">{{ review.first_name }}</span>
+                            <span style="color:var(--danger);font-weight:700;">{{ '★' * review.overall_rating|int }}</span>
+                        </div>
+                        <p style="font-size:0.78rem;color:var(--text-medium);margin-top:0.3rem;">{{ review.comment[:100] }}...</p>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </main>
+</div>
+
+<!-- Manager Room Status Modal -->
+<div class="modal-overlay" id="managerRoomModal">
+    <div class="modal">
+        <div class="modal-header">
+            <h3 class="modal-title" id="managerRoomTitle">Update Room Status</h3>
+            <button class="modal-close" onclick="document.getElementById('managerRoomModal').classList.remove('show')">&times;</button>
+        </div>
+        <p style="color:var(--text-light);margin-bottom:1rem;" id="managerRoomInfo"></p>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;">
+            <button class="btn btn-success" onclick="updateManagerRoomStatus('available')">🟢 Available</button>
+            <button class="btn btn-danger" onclick="updateManagerRoomStatus('occupied')">🔴 Occupied</button>
+            <button class="btn btn-warning" onclick="updateManagerRoomStatus('cleaning')">🟡 Cleaning</button>
+            <button class="btn" style="background:#17a2b8;color:white;" onclick="updateManagerRoomStatus('maintenance')">🔵 Maintenance</button>
+            <button class="btn" style="background:#8a6d3b;color:white;" onclick="updateManagerRoomStatus('reserved')">🟤 Reserved</button>
+        </div>
+    </div>
+</div>
+
+<script>
+let selectedManagerRoom = null;
+
+function updateBookingStatus(bookingId) {
+    const select = document.getElementById(`bookingStatus_${bookingId}`);
+    if (!select) return;
+    fetch('/api/manager/booking/status', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({booking_id: bookingId, status: select.value})
+    }).then(r => r.json()).then(d => {
+        if (d.success) { showToast('Booking status updated'); location.reload(); }
+    });
+}
+
+function openManagerRoomModal(roomNum, status, type) {
+    selectedManagerRoom = roomNum;
+    document.getElementById('managerRoomTitle').textContent = `Room ${roomNum}`;
+    document.getElementById('managerRoomInfo').textContent = `${type} | Current: ${status}`;
+    document.getElementById('managerRoomModal').classList.add('show');
+}
+
+function updateManagerRoomStatus(status) {
+    if (!selectedManagerRoom) return;
+    fetch('/api/manager/room/update-status', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({room_number: selectedManagerRoom, status: status})
+    }).then(r => r.json()).then(d => {
+        if (d.success) {
+            const cell = document.querySelector(`.room-cell[data-room="${selectedManagerRoom}"]`);
+            if (cell) cell.className = `room-cell ${status}`;
+            document.getElementById('managerRoomModal').classList.remove('show');
+            showToast(`Room ${selectedManagerRoom} updated to ${status}`);
+        }
+    });
+}
+</script>
+{% endblock %}
