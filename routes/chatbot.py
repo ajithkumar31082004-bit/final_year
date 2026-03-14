@@ -5,7 +5,7 @@ from datetime import datetime
 import html
 from flask import Blueprint, jsonify, request, session, current_app
 from models.database import get_db
-from ml_models.intent import detect_intent
+from ml_models.agent_service import detect_intent
 from ml_models.models import (
     get_pricing_engine,
     get_sentiment_analyzer,
@@ -14,6 +14,7 @@ from ml_models.models import (
 )
 from ml_models.agent_service import save_chat
 from services.ai_chat_service import generate_ai_reply
+from services.refund_policy import calculate_refund_pct, get_refund_thresholds
 
 chatbot_bp = Blueprint("chatbot", __name__)
 
@@ -224,6 +225,7 @@ def _detect_language(message):
 
 
 def _t(key, lang="en", **kwargs):
+    full_hours, half_hours = get_refund_thresholds()
     messages = {
         "en": {
             "help": "I can help with room availability, prices, booking, cancellations, and services. What do you need?",
@@ -254,7 +256,7 @@ def _t(key, lang="en", **kwargs):
             "prices_range": "Room prices range from INR {min_price} to INR {max_price} per night.",
             "price_type": "{room_type} average price is INR {avg_price} per night (range INR {min_price} - {max_price}).",
             "booking_guidance": "To book: go to <a href=\"/rooms\">Rooms</a>, pick a room, select dates, and confirm payment.",
-            "cancellation_help": "Cancel from <a href=\"/guest/bookings\">My Bookings</a>. Policy: full refund 48+ hours before check-in, 50% within 24-48 hours, no refund within 24 hours.",
+            "cancellation_help": "Cancel from <a href=\"/guest/bookings\">My Bookings</a>. Policy: full refund {full_hours}+ hours before check-in, 50% within {half_hours}-{full_hours} hours, no refund within {half_hours} hours.",
             "amenities_help": "Amenities: pool, fitness center, spa, restaurant & bar, business center, concierge. Wi-Fi is free.",
             "checkin_help": "Check-in: 2:00 PM. Check-out: 12:00 PM. ID required at check-in.",
             "location_help": "We are at 123 Marina Beach Road, Chennai - 600001.",
@@ -291,7 +293,7 @@ def _t(key, lang="en", **kwargs):
             "prices_range": "Price range: INR {min_price} - INR {max_price} per night.",
             "price_type": "{room_type} avg price INR {avg_price} (range INR {min_price}-{max_price}).",
             "booking_guidance": "Booking ke liye <a href=\"/rooms\">Rooms</a> par jayein.",
-            "cancellation_help": "Cancel: <a href=\"/guest/bookings\">My Bookings</a>. Policy: 48+ hours full refund, 24-48 hours 50%, 24 hours ke andar no refund.",
+            "cancellation_help": "Cancel: <a href=\"/guest/bookings\">My Bookings</a>. Policy: {full_hours}+ hours full refund, {half_hours}-{full_hours} hours 50%, {half_hours} hours ke andar no refund.",
             "amenities_help": "Amenities: pool, gym, spa, restaurant, concierge, free Wi-Fi.",
             "checkin_help": "Check-in 2:00 PM, check-out 12:00 PM.",
             "location_help": "Address: 123 Marina Beach Road, Chennai - 600001.",
@@ -328,7 +330,7 @@ def _t(key, lang="en", **kwargs):
             "prices_range": "Price range: INR {min_price} - INR {max_price} per night.",
             "price_type": "{room_type} avg price INR {avg_price} (range INR {min_price}-{max_price}).",
             "booking_guidance": "Booking-kaga <a href=\"/rooms\">Rooms</a> pogavum.",
-            "cancellation_help": "Cancel: <a href=\"/guest/bookings\">My Bookings</a>. Policy: 48+ hours full refund, 24-48 hours 50%, 24 hours ulla no refund.",
+            "cancellation_help": "Cancel: <a href=\"/guest/bookings\">My Bookings</a>. Policy: {full_hours}+ hours full refund, {half_hours}-{full_hours} hours 50%, {half_hours} hours ulla no refund.",
             "amenities_help": "Amenities: pool, gym, spa, restaurant, concierge, free Wi-Fi.",
             "checkin_help": "Check-in 2:00 PM, check-out 12:00 PM.",
             "location_help": "Address: 123 Marina Beach Road, Chennai - 600001.",
@@ -338,6 +340,8 @@ def _t(key, lang="en", **kwargs):
         },
     }
     template = messages.get(lang, messages["en"]).get(key, "")
+    kwargs.setdefault("full_hours", full_hours)
+    kwargs.setdefault("half_hours", half_hours)
     return template.format(**kwargs)
 
 
@@ -846,16 +850,8 @@ def _cancel_booking(user_id, booking_id):
         return None, "not_allowed"
 
     ci = datetime.strptime(booking["check_in"], "%Y-%m-%d")
-    days_until = (ci - datetime.now()).days
-    if days_until > 48:
-        refund_pct = 1.0
-    elif days_until > 24:
-        refund_pct = 0.5
-    else:
-        refund_pct = 0.0
-
-    if booking.get("payment_status") != "paid":
-        refund_pct = 0.0
+    hours_until = (ci - datetime.now()).total_seconds() / 3600.0
+    refund_pct = calculate_refund_pct(hours_until, booking.get("payment_status"))
     refund_amount = booking["total_amount"] * refund_pct
 
     conn.execute(

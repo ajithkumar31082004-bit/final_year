@@ -54,6 +54,10 @@ class Config:
     # Offers eligibility
     OFFERS_REQUIRE_FIRST_BOOKING = True
     OFFERS_MIN_POINTS = 1000
+
+    # Refund policy (hours before check-in)
+    REFUND_FULL_HOURS = 48
+    REFUND_HALF_HOURS = 24
     
     # WTF
     WTF_CSRF_ENABLED = True

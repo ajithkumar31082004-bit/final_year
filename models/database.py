@@ -6,16 +6,46 @@ SQLite-based database with all tables for the hotel management system
 import sqlite3
 import os
 from datetime import datetime
+from flask import g, has_app_context
 
 DATABASE_PATH = os.environ.get("DATABASE_PATH", "blissful_abodes.db")
 
 
+class _ConnectionProxy:
+    def __init__(self, conn):
+        self._conn = conn
+
+    def close(self):
+        # No-op: real close happens in close_db() teardown.
+        return None
+
+    def __getattr__(self, name):
+        return getattr(self._conn, name)
+
+
 def get_db():
     """Get database connection"""
+    if has_app_context():
+        conn = g.get("_db_conn")
+        if conn is None:
+            conn = sqlite3.connect(DATABASE_PATH)
+            conn.row_factory = sqlite3.Row
+            conn.execute("PRAGMA foreign_keys = ON")
+            g._db_conn = conn
+        return _ConnectionProxy(conn)
+
     conn = sqlite3.connect(DATABASE_PATH)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     return conn
+
+
+def close_db(error=None):
+    if not has_app_context():
+        return
+    conn = g.pop("_db_conn", None)
+    if conn is not None:
+        conn.close()
 
 
 def init_db():
@@ -347,6 +377,21 @@ def init_db():
         )
     """
     )
+
+    # Indexes for hot queries
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_role_active ON users(role, is_active)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_bookings_user ON bookings(user_id)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_bookings_status ON bookings(status)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_bookings_payment ON bookings(payment_status)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_bookings_created ON bookings(created_at)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_bookings_checkin ON bookings(check_in)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_rooms_status ON rooms(status)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_rooms_type ON rooms(room_type)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_notifications_user_read ON notifications(user_id, read_status)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_reviews_room ON reviews(room_id)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_reviews_user ON reviews(user_id)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_coupons_code ON coupons(code)")
 
     conn.commit()
     conn.close()

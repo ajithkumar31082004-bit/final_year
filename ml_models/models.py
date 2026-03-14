@@ -7,6 +7,7 @@ import os
 import json
 import random
 import importlib.util
+import hashlib
 from pathlib import Path
 import numpy as np
 import joblib
@@ -130,7 +131,9 @@ class DemandForecastingModel:
 
             month_factor = self.seasonal_factors.get(fd.month, 1.0)
             weekday_factor = self.weekday_factors.get(fd.weekday(), 1.0)
-            noise = random.uniform(0.9, 1.1)
+            seed = f"{fd.isoformat()}:{self.base_bookings}"
+            jitter = int(hashlib.md5(seed.encode()).hexdigest()[:4], 16) / 0xFFFF
+            noise = 0.9 + (1.1 - 0.9) * jitter
 
             predicted = round(
                 self.base_bookings * month_factor * weekday_factor * noise
@@ -142,7 +145,7 @@ class DemandForecastingModel:
                     "date": fd.strftime("%Y-%m-%d"),
                     "predicted_bookings": predicted,
                     "occupancy_pct": round(predicted / 100 * 100, 1),
-                    "confidence": round(random.uniform(0.82, 0.95), 2),
+                    "confidence": round(0.82 + (0.95 - 0.82) * jitter, 2),
                 }
             )
 
@@ -489,8 +492,14 @@ class FraudDetector:
             score += 0.35
             flags.append("Suspicious email domain")
 
-        # Random small variation for realism
-        score += random.uniform(0, 0.05)
+        # Deterministic small variation for realism
+        seed = (
+            f"{booking_data.get('booking_id','')}-"
+            f"{booking_data.get('user_id','')}-"
+            f"{booking_data.get('email','')}"
+        )
+        jitter = int(hashlib.md5(seed.encode()).hexdigest()[:4], 16) / 0xFFFF
+        score += jitter * 0.05
         score = min(score, 1.0)
 
         is_suspicious = score > 0.50
@@ -573,7 +582,14 @@ class CancellationPredictor:
         if room_type in ["VIP Suite", "Couple"]:
             prob -= 0.05  # Premium bookings less likely to cancel
 
-        prob += random.uniform(-0.05, 0.05)
+        seed = (
+            f"{booking_data.get('booking_id','')}-"
+            f"{booking_data.get('user_id','')}-"
+            f"{booking_data.get('check_in','')}-"
+            f"{booking_data.get('check_out','')}"
+        )
+        jitter = int(hashlib.md5(seed.encode()).hexdigest()[:4], 16) / 0xFFFF
+        prob += (jitter - 0.5) * 0.10
         prob = max(0.05, min(0.95, prob))
 
         recommendation = None
@@ -637,7 +653,6 @@ def _find_external_model_path(filename):
         Path(os.environ.get("BA_EXTERNAL_MODEL_DIR", "")) / filename
         if os.environ.get("BA_EXTERNAL_MODEL_DIR")
         else None,
-        Path.home() / "Downloads" / filename,
     ]
     for path in candidates:
         if path and path.exists():

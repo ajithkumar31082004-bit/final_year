@@ -32,6 +32,7 @@ from services.email_service import (
     send_cancellation_email,
     send_review_request,
 )
+from services.refund_policy import calculate_refund_pct
 from services.pdf_service import generate_gst_invoice, generate_booking_qr
 from services.payment_service import create_order, verify_payment, RAZORPAY_KEY_ID
 
@@ -672,7 +673,7 @@ def book_room(room_id):
                 conn.commit()
                 conn.close()
             except Exception:
-                pass
+                current_app.logger.exception("Failed to generate booking QR")
 
             # Send confirmation email
             try:
@@ -706,7 +707,7 @@ def book_room(room_id):
                     invoice_path,
                 )
             except Exception:
-                pass
+                current_app.logger.exception("Failed to send booking confirmation")
 
             flash(
                 f"Room booked successfully! Booking ID: {booking_id} | You earned {pts_earned} loyalty points!",
@@ -889,7 +890,7 @@ def verify_payment_api():
             (qr_path, booking_id),
         )
     except Exception:
-        pass
+        current_app.logger.exception("Failed to generate booking QR (payment)")
 
     # Add notification
     conn.execute(
@@ -935,7 +936,7 @@ def verify_payment_api():
             invoice_path,
         )
     except Exception:
-        pass
+        current_app.logger.exception("Failed to send booking confirmation (payment)")
 
     return jsonify({"success": True})
 
@@ -961,17 +962,8 @@ def cancel_booking(booking_id):
 
     # Calculate refund
     ci = datetime.strptime(booking["check_in"], "%Y-%m-%d")
-    days_until = (ci - datetime.now()).days
-
-    if days_until > 48:
-        refund_pct = 1.0
-    elif days_until > 24:
-        refund_pct = 0.5
-    else:
-        refund_pct = 0.0
-
-    if booking.get("payment_status") != "paid":
-        refund_pct = 0.0
+    hours_until = (ci - datetime.now()).total_seconds() / 3600.0
+    refund_pct = calculate_refund_pct(hours_until, booking.get("payment_status"))
     refund_amount = booking["total_amount"] * refund_pct
 
     conn.execute(
@@ -997,7 +989,7 @@ def cancel_booking(booking_id):
             user["email"], user["first_name"], booking, refund_amount
         )
     except Exception:
-        pass
+        current_app.logger.exception("Failed to send cancellation email")
 
     return jsonify(
         {"success": True, "refund": refund_amount, "refund_pct": int(refund_pct * 100)}
@@ -1055,6 +1047,20 @@ def write_review(booking_id):
 
         sentiment = get_sentiment_analyzer()
         analysis = sentiment.analyze(comment)
+
+        # Feed interaction signal to recommendation model
+        try:
+            from ml_models.models import get_recommendation_model
+
+            recommender = get_recommendation_model()
+            if hasattr(recommender, "add_interaction"):
+                recommender.add_interaction(
+                    user["user_id"], booking.get("room_type", "Single"), rating
+                )
+                if hasattr(recommender, "save"):
+                    recommender.save()
+        except Exception:
+            current_app.logger.exception("Failed to record recommendation interaction")
 
         if booking:
             room_id = booking["room_id"]

@@ -12,6 +12,7 @@ from flask import (
     flash,
     session,
     jsonify,
+    current_app,
 )
 import uuid
 import random
@@ -20,6 +21,7 @@ from datetime import datetime, timedelta
 from models.database import get_db
 from services.email_service import send_welcome_email, send_otp_email
 from services.security import hash_password, check_password
+from services.rate_limiter import check_rate_limit
 
 auth_bp = Blueprint("auth", __name__)
 
@@ -98,7 +100,7 @@ def register():
         try:
             send_welcome_email(email, first_name)
         except Exception:
-            pass
+            current_app.logger.exception("Failed to send welcome email")
 
         log_action(user_id, "REGISTER", "users", email, request.remote_addr)
         flash("Registration successful! Welcome to Blissful Abodes!", "success")
@@ -115,6 +117,16 @@ def login():
     if request.method == "POST":
         email = request.form.get("email", "").strip().lower()
         password = request.form.get("password", "")
+        ip_addr = request.remote_addr or "unknown"
+        allowed, retry_after = check_rate_limit(
+            f"login:{ip_addr}:{email}", limit=5, window_seconds=300
+        )
+        if not allowed:
+            flash(
+                f"Too many login attempts. Try again in {retry_after} seconds.",
+                "danger",
+            )
+            return render_template("auth/login.html")
 
         conn = get_db()
         user = conn.execute(
@@ -186,7 +198,7 @@ def forgot_password():
             try:
                 send_otp_email(email, user["first_name"], otp)
             except Exception:
-                pass
+                current_app.logger.exception("Failed to send OTP email (forgot-password)")
             session["reset_email"] = email
             flash(f"OTP sent to {email}. Check your inbox.", "success")
             return redirect(url_for("auth.reset_password"))
@@ -242,6 +254,20 @@ def reset_password():
 def send_otp():
     """AJAX endpoint to send OTP"""
     email = request.json.get("email", "")
+    ip_addr = request.remote_addr or "unknown"
+    allowed, retry_after = check_rate_limit(
+        f"send_otp:{ip_addr}:{email}", limit=3, window_seconds=600
+    )
+    if not allowed:
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "message": f"Too many OTP requests. Try again in {retry_after} seconds.",
+                }
+            ),
+            429,
+        )
     conn = get_db()
     user = conn.execute("SELECT * FROM users WHERE email = ?", (email,)).fetchone()
     conn.close()
@@ -258,7 +284,7 @@ def send_otp():
         try:
             send_otp_email(email, user["first_name"], otp)
         except Exception:
-            pass
+            current_app.logger.exception("Failed to send OTP email (send-otp)")
         return jsonify({"success": True, "message": f"OTP sent to {email}"})
 
     return jsonify({"success": False, "message": "Email not found"})

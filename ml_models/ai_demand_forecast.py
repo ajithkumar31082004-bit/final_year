@@ -10,7 +10,7 @@ Simulated LSTM-style time-series forecasting using:
 Output: next 30 days demand with predicted occupancy.
 """
 
-import random
+import hashlib
 from datetime import date, timedelta
 
 
@@ -68,7 +68,9 @@ def _predict(
         d = today + timedelta(days=i)
         season = SEASONAL_MULTIPLIERS.get(d.month, 1.0)
         weekday = WEEKDAY_TRENDS.get(d.weekday(), 1.0)
-        noise = random.uniform(0.92, 1.08)
+        seed = f"{d.isoformat()}:{baseline}"
+        jitter = int(hashlib.md5(seed.encode()).hexdigest()[:4], 16) / 0xFFFF
+        noise = 0.92 + (1.08 - 0.92) * jitter
 
         raw = baseline * season * weekday * noise
         pred = _smooth(int(round(raw)), last_pred)
@@ -76,7 +78,7 @@ def _predict(
         last_pred = pred
 
         occupancy = min(100.0, round(pred / max_capacity * 100, 1))
-        confidence = round(random.uniform(0.82, 0.94), 2)
+        confidence = round(0.82 + 0.12 * jitter, 2)
 
         predictions.append(
             {

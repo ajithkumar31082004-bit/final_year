@@ -17,6 +17,7 @@ from flask import (
 )
 from flask_wtf.csrf import CSRFProtect
 from config import config
+import time
 
 
 def create_app(config_name="default"):
@@ -59,6 +60,13 @@ def create_app(config_name="default"):
     app.register_blueprint(agent_bp)
     app.register_blueprint(chatbot_bp)
 
+    # DB teardown
+    from models.database import close_db
+
+    @app.teardown_appcontext
+    def _teardown_db(error=None):
+        close_db(error)
+
     # Context processor - inject user data to all templates
     @app.context_processor
     def inject_globals():
@@ -66,27 +74,45 @@ def create_app(config_name="default"):
 
         user_data = None
         unread_notifications = 0
+        notifications = []
 
         if "user_id" in session:
             try:
-                conn = get_db()
-                user_data = conn.execute(
-                    "SELECT * FROM users WHERE user_id = ?", (session["user_id"],)
-                ).fetchone()
-                if user_data:
-                    unread_notifications = conn.execute(
-                        "SELECT COUNT(*) FROM notifications WHERE user_id = ? AND read_status = 0",
-                        (session["user_id"],),
-                    ).fetchone()[0]
-                    notifications = conn.execute(
-                        "SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT 5",
-                        (session["user_id"],),
-                    ).fetchall()
-                    user_data = dict(user_data)
-                    user_data["notifications_list"] = [dict(n) for n in notifications]
-                conn.close()
+                cache = session.get("_ui_cache") or {}
+                now = time.time()
+                cached_user_id = cache.get("user_id")
+                cached_at = cache.get("ts", 0)
+                if cached_user_id == session["user_id"] and (now - cached_at) < 30:
+                    user_data = cache.get("user")
+                    unread_notifications = cache.get("unread", 0)
+                    notifications = cache.get("notifications", [])
+                else:
+                    conn = get_db()
+                    user_data = conn.execute(
+                        "SELECT * FROM users WHERE user_id = ?", (session["user_id"],)
+                    ).fetchone()
+                    if user_data:
+                        unread_notifications = conn.execute(
+                            "SELECT COUNT(*) FROM notifications WHERE user_id = ? AND read_status = 0",
+                            (session["user_id"],),
+                        ).fetchone()[0]
+                        notifications = conn.execute(
+                            "SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT 5",
+                            (session["user_id"],),
+                        ).fetchall()
+                        user_data = dict(user_data)
+                        notifications = [dict(n) for n in notifications]
+                        user_data["notifications_list"] = notifications
+                        session["_ui_cache"] = {
+                            "user_id": session["user_id"],
+                            "ts": now,
+                            "user": user_data,
+                            "unread": unread_notifications,
+                            "notifications": notifications,
+                        }
+                    conn.close()
             except Exception:
-                pass
+                app.logger.exception("Failed to build context processor data")
 
         return {
             "current_user": user_data,
@@ -383,27 +409,28 @@ def create_app(config_name="default"):
         def auto_update_prices():
             """Update dynamic prices hourly"""
             try:
-                from ml_models.models import get_pricing_engine
-                from models.database import get_db
+                with app.app_context():
+                    from ml_models.models import get_pricing_engine
+                    from models.database import get_db
 
-                conn = get_db()
-                occ = conn.execute(
-                    "SELECT COUNT(*) FROM rooms WHERE status IN ('occupied','reserved')"
-                ).fetchone()[0]
-                total_rooms = conn.execute("SELECT COUNT(*) FROM rooms").fetchone()[0]
-                occupied_pct = round(occ / max(total_rooms, 1) * 100, 1)
+                    conn = get_db()
+                    occ = conn.execute(
+                        "SELECT COUNT(*) FROM rooms WHERE status IN ('occupied','reserved')"
+                    ).fetchone()[0]
+                    total_rooms = conn.execute("SELECT COUNT(*) FROM rooms").fetchone()[0]
+                    occupied_pct = round(occ / max(total_rooms, 1) * 100, 1)
 
-                pricing = get_pricing_engine()
-                today = datetime.now().date()
+                    pricing = get_pricing_engine()
+                    today = datetime.now().date()
 
-                prices = pricing.get_all_current_prices(occupied_pct)
-                for room_type, data in prices.items():
-                    conn.execute(
-                        "UPDATE rooms SET current_price = ? WHERE room_type = ?",
-                        (data["final_price"], room_type),
-                    )
-                conn.commit()
-                conn.close()
+                    prices = pricing.get_all_current_prices(occupied_pct)
+                    for room_type, data in prices.items():
+                        conn.execute(
+                            "UPDATE rooms SET current_price = ? WHERE room_type = ?",
+                            (data["final_price"], room_type),
+                        )
+                    conn.commit()
+                    conn.close()
             except Exception as e:
                 print(f"[SCHEDULER] Price update error: {e}")
 

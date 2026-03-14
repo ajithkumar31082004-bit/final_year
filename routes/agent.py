@@ -1,4 +1,5 @@
 from flask import Blueprint, render_template, request, session, jsonify
+from functools import wraps
 from models.database import get_db
 from ml_models.agent_service import (
     ensure_ids,
@@ -8,6 +9,16 @@ from ml_models.agent_service import (
 )
 
 agent_bp = Blueprint("agent", __name__)
+
+
+def login_required_api(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if "user_id" not in session:
+            return jsonify({"ok": False, "error": "Login required"}), 401
+        return f(*args, **kwargs)
+
+    return decorated
 
 
 def _get_agent_history_id():
@@ -40,6 +51,7 @@ def agent_home():
 
 
 @agent_bp.route("/agent/message", methods=["POST"])
+@login_required_api
 def agent_message():
     data = request.get_json(silent=True) or {}
     prompt = (data.get("message") or "").strip()
