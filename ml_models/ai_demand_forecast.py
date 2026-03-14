@@ -47,22 +47,11 @@ def _smooth(value, last_value):
     return round(last_value * 0.6 + value * 0.4)
 
 
-def predict_next_30_days(
+def _predict(
     historical_bookings=None,
     base_bookings=12,
     max_capacity=100,
 ):
-    """
-    Predict next 30 days demand.
-
-    Returns list[dict]:
-    {
-        "date": "YYYY-MM-DD",
-        "predicted_bookings": int,
-        "occupancy_pct": float,
-        "confidence": float
-    }
-    """
     today = date.today()
     predictions = []
     last_pred = None
@@ -70,7 +59,8 @@ def predict_next_30_days(
     baseline = base_bookings
     if historical_bookings:
         try:
-            baseline = max(3, int(sum(historical_bookings[-30:]) / max(1, len(historical_bookings[-30:]))))
+            recent = historical_bookings[-30:]
+            baseline = max(3, int(sum(recent) / max(1, len(recent))))
         except Exception:
             baseline = base_bookings
 
@@ -100,6 +90,42 @@ def predict_next_30_days(
     return predictions
 
 
+class DemandForecastingModel:
+    """Class wrapper to mirror other ai_* module styles."""
+
+    def predict_next_30_days(self, historical_bookings=None):
+        return _predict(historical_bookings=historical_bookings)
+
+    def get_next_7_days_avg(self):
+        preds = self.predict_next_30_days()[:7]
+        return round(sum(p["predicted_bookings"] for p in preds) / 7, 1)
+
+
+_MODEL = DemandForecastingModel()
+
+
+def predict_next_30_days(
+    historical_bookings=None,
+    base_bookings=12,
+    max_capacity=100,
+):
+    """
+    Predict next 30 days demand.
+
+    Returns list[dict]:
+    {
+        "date": "YYYY-MM-DD",
+        "predicted_bookings": int,
+        "occupancy_pct": float,
+        "confidence": float
+    }
+    """
+    return _predict(
+        historical_bookings=historical_bookings,
+        base_bookings=base_bookings,
+        max_capacity=max_capacity,
+    )
+
+
 def get_next_7_days_avg():
-    preds = predict_next_30_days()[:7]
-    return round(sum(p["predicted_bookings"] for p in preds) / 7, 1)
+    return _MODEL.get_next_7_days_avg()
