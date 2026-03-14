@@ -15,12 +15,14 @@ from flask import (
     request,
     flash,
 )
+from flask_wtf.csrf import CSRFProtect
 from config import config
 
 
 def create_app(config_name="default"):
     app = Flask(__name__)
     app.config.from_object(config[config_name])
+    CSRFProtect(app)
 
     # Initialize DB
     from models.database import init_db

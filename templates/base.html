@@ -6,6 +6,7 @@
     <title>
       {% block title %}Blissful Abodes Chennai — Luxury Hotel{% endblock %}
     </title>
+    <meta name="csrf-token" content="{{ csrf_token() }}" />
     <meta
       name="description"
       content="{% block description %}Experience luxury at Blissful Abodes Chennai - Premium hotel at Marina Beach Road. Book now with exclusive rates!{% endblock %}"
@@ -562,6 +563,35 @@
 
     <!-- JavaScript -->
     <script>
+      const CSRF_TOKEN = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+      const CSRF_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+      const _fetch = window.fetch.bind(window);
+      window.fetch = (input, init = {}) => {
+          const method = (init.method || 'GET').toUpperCase();
+          if (CSRF_TOKEN && CSRF_METHODS.has(method)) {
+              const headers = new Headers(init.headers || {});
+              if (!headers.has('X-CSRFToken') && !headers.has('X-CSRF-Token')) {
+                  headers.set('X-CSRFToken', CSRF_TOKEN);
+              }
+              init = { ...init, headers };
+          }
+          return _fetch(input, init);
+      };
+
+      document.addEventListener('DOMContentLoaded', () => {
+          if (!CSRF_TOKEN) return;
+          document.querySelectorAll('form').forEach(form => {
+              const method = (form.getAttribute('method') || 'GET').toUpperCase();
+              if (method !== 'POST') return;
+              if (form.querySelector('input[name="csrf_token"]')) return;
+              const input = document.createElement('input');
+              input.type = 'hidden';
+              input.name = 'csrf_token';
+              input.value = CSRF_TOKEN;
+              form.appendChild(input);
+          });
+      });
+
       // Dark mode
       function toggleDarkMode() {
           const body = document.body;

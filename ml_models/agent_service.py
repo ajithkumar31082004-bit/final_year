@@ -285,7 +285,7 @@ def _fraud_check_booking(
 
 def _create_booking(user_id: Optional[str], agent_user_id: str, room, check_in, check_out, guests):
     if not user_id:
-        user_id = _ensure_agent_guest(agent_user_id)
+        return None, "Please log in to complete a booking.", None
 
     ci = datetime.strptime(check_in, "%Y-%m-%d")
     co = datetime.strptime(check_out, "%Y-%m-%d")
@@ -977,6 +977,11 @@ def handle_agent_message(
     logged_in_user_id: Optional[str] = None,
 ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     intent = detect_intent(prompt)
+
+    if (booking_state.get("active") or intent == "book") and not logged_in_user_id:
+        return {"type": "text", "text": "Please log in to book a room."}, booking_state
+    if intent == "cancel" and not logged_in_user_id:
+        return {"type": "text", "text": "Please log in to manage bookings."}, booking_state
 
     if booking_state.get("active") or intent == "book":
         text, new_state, extra = process_booking_step(

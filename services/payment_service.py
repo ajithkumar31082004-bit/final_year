@@ -81,7 +81,7 @@ def verify_payment(razorpay_order_id, razorpay_payment_id, razorpay_signature):
         ).hexdigest()
         return expected_sig == razorpay_signature
     except Exception:
-        return True  # Return True for demo mode
+        return False
 
 
 def process_refund(payment_id, amount_inr, notes=None):
