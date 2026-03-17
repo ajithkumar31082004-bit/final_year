@@ -398,7 +398,7 @@ def ml_analytics():
     # Fraud summary
     conn = get_db()
     high_fraud = conn.execute(
-        "SELECT COUNT(*) FROM bookings WHERE fraud_score > 0.5"
+        "SELECT COUNT(*) FROM bookings WHERE fraud_score >= 35"
     ).fetchone()[0]
     flagged = conn.execute(
         "SELECT COUNT(*) FROM bookings WHERE is_flagged = 1"

@@ -23,3 +23,8 @@ itsdangerous==2.1.2
 click==8.1.7
 pytz==2023.3
 python-dateutil==2.8.2
+streamlit
+google-genai
+google-adk
+pydantic
+requests

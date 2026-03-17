@@ -10,22 +10,46 @@ except ImportError:
     st = None
     _STREAMLIT_AVAILABLE = False
 from typing import Literal, Optional, List, Dict
-from google.genai import types
-from pydantic import BaseModel, Field
-from google.adk.runners import Runner
-from google.adk.tools import google_search, agent_tool
-from google.adk.agents import Agent, LlmAgent, SequentialAgent
-from google.adk.models.lite_llm import LiteLlm
-from google.adk.sessions import InMemorySessionService
-import requests
+try:
+    from google.genai import types
+    from pydantic import BaseModel, Field
+    from google.adk.runners import Runner
+    from google.adk.tools import google_search, agent_tool
+    from google.adk.agents import Agent, LlmAgent, SequentialAgent
+    from google.adk.models.lite_llm import LiteLlm
+    from google.adk.sessions import InMemorySessionService
+    import requests
+    _ADK_AVAILABLE = True
+    _ADK_ERROR = ""
+except Exception as exc:
+    types = None
+    Runner = None
+    google_search = None
+    agent_tool = None
+    Agent = None
+    LlmAgent = None
+    SequentialAgent = None
+    LiteLlm = None
+    InMemorySessionService = None
+    requests = None
+    _ADK_AVAILABLE = False
+    _ADK_ERROR = str(exc)
+
+    class BaseModel:  # minimal fallback to avoid import-time crashes
+        pass
+
+    def Field(*args, **kwargs):
+        return None
 
 APP_NAME = "hotels_app"
 USER_ID = "user_1"
 SESSION_ID = "session_001"
-SESSION_SERVICE = InMemorySessionService()
+SESSION_SERVICE = InMemorySessionService() if _ADK_AVAILABLE else None
 
 
 async def create_session():
+    if not _ADK_AVAILABLE:
+        raise RuntimeError(f"Agent dependencies missing: {_ADK_ERROR}")
     await SESSION_SERVICE.create_session(
         app_name=APP_NAME, user_id=USER_ID, session_id=SESSION_ID
     )
@@ -112,27 +136,36 @@ class HotelSearchOutput(BaseModel):
     output: list[Hotel]
 
 
-HOTEL_SEARCH_AGENT = LlmAgent(
-    name="hotel_search_agent",
-    model="gemini-2.0-flash",
-    description="Hotel Search Agent",
-    instruction=HOTEL_SEARCH_AGENT_INSTRUCTIONS,
-    generate_content_config=types.GenerateContentConfig(temperature=0),
-    tools=[google_search],
-)
+if _ADK_AVAILABLE:
+    HOTEL_SEARCH_AGENT = LlmAgent(
+        name="hotel_search_agent",
+        model="gemini-2.0-flash",
+        description="Hotel Search Agent",
+        instruction=HOTEL_SEARCH_AGENT_INSTRUCTIONS,
+        generate_content_config=types.GenerateContentConfig(temperature=0),
+        tools=[google_search],
+    )
 
-BOOKING_AGENT = LlmAgent(
-    name="booking_agent",
-    model="gemini-2.0-flash",
-    description="Hotel Booking Agent",
-    instruction=BOOKING_AGENT_INSTRUCTIONS,
-    generate_content_config=types.GenerateContentConfig(temperature=0.3),
-    tools=[],
-)
+    BOOKING_AGENT = LlmAgent(
+        name="booking_agent",
+        model="gemini-2.0-flash",
+        description="Hotel Booking Agent",
+        instruction=BOOKING_AGENT_INSTRUCTIONS,
+        generate_content_config=types.GenerateContentConfig(temperature=0.3),
+        tools=[],
+    )
+else:
+    HOTEL_SEARCH_AGENT = None
+    BOOKING_AGENT = None
 
 def run_streamlit_app():
     if not _STREAMLIT_AVAILABLE:
         raise RuntimeError('Streamlit is required to run ml_models/agent.py')
+    if not _ADK_AVAILABLE:
+        raise RuntimeError(
+            "Agent dependencies missing. Install: streamlit, google-genai, "
+            "google-adk, pydantic, requests."
+        )
     # Store booking state
     if "booking_state" not in st.session_state:
         st.session_state.booking_state = {
