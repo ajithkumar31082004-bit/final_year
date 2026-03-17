@@ -1,4 +1,4 @@
-﻿"""
+"""
 Blissful Abodes - Guest Routes
 Guest dashboard, room browsing, booking, reviews, loyalty
 """
@@ -571,7 +571,7 @@ def book_room(room_id):
         is_cash = str(payment_method).lower() in ["cash", "cash_at_desk", "cash at desk"]
         status = "confirmed" if is_cash else "pending"
         payment_status = "paid" if is_cash else "pending"
-        is_flagged = 1 if fraud_result.get("is_suspicious") else 0
+        is_flagged = 1 if fraud_result.get("fraud_score", 0) >= 35 else 0
 
         conn = get_db()
         conn.execute(

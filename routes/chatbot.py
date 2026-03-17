@@ -783,7 +783,8 @@ def _create_booking(user_id, room, check_in, check_out, guests, payment_method):
     )
     if fraud_result.get("risk_level") == "HIGH":
         return None, "fraud_high", fraud_result
-    is_flagged = 0
+    fraud_score = fraud_result.get("fraud_score", 0)
+    is_flagged = 1 if fraud_score >= 35 else 0
 
     booking_id = f"BK{datetime.now().strftime('%Y%m%d')}{uuid.uuid4().hex[:6].upper()}"
     is_cash = str(payment_method).lower() in ["cash", "cash_at_desk", "cash at desk"]
@@ -811,7 +812,7 @@ def _create_booking(user_id, room, check_in, check_out, guests, payment_method):
             status,
             payment_status,
             payment_method,
-            fraud_result.get("fraud_score", 0),
+            fraud_score,
             is_flagged,
         ),
     )
