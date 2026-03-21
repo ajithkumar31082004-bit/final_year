@@ -195,13 +195,16 @@
             {% if flagged_bookings %}
             <div class="table-container">
             <table class="data-table">
-                <thead><tr><th>Booking</th><th>Guest</th><th>Fraud Score</th><th>Status</th></tr></thead>
+                <thead><tr><th>Booking</th><th>Guest</th><th>Fraud Score</th><th>Reasons</th><th>Status</th></tr></thead>
                 <tbody>
                 {% for b in flagged_bookings %}
                 <tr>
                     <td>{{ b.booking_id }}</td>
                     <td>{{ b.first_name }} {{ b.last_name }}</td>
                     <td>{{ (b.fraud_score * 100) | round(1) }}%</td>
+                    <td style="font-size:0.8rem;color:var(--text-light);">
+                        {{ b.fraud_flags|join(', ') if b.fraud_flags else '—' }}
+                    </td>
                     <td><span class="badge badge-warning">Flagged</span></td>
                 </tr>
                 {% endfor %}
@@ -257,6 +260,7 @@
             <button class="modal-close" onclick="document.getElementById('createUserModal').classList.remove('show')">&times;</button>
         </div>
         <form method="POST" action="{{ url_for('superadmin.create_any_user') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
                 <div class="form-group"><label class="form-label">First Name</label><input type="text" name="first_name" class="form-control" required></div>
                 <div class="form-group"><label class="form-label">Last Name</label><input type="text" name="last_name" class="form-control" required></div>

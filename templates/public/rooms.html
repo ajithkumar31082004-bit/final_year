@@ -30,9 +30,9 @@
                 <option value="10000" {% if filters.max_price == '10000' %}selected{% endif %}>Under ₹10,000</option>
             </select>
             <select name="sort" class="form-control" style="width:auto;" onchange="this.form.submit()">
-                <option value="price_asc">Price: Low to High</option>
-                <option value="price_desc">Price: High to Low</option>
-                <option value="rating">Best Rated</option>
+                <option value="price_asc" {% if filters.sort == 'price_asc' %}selected{% endif %}>Price: Low to High</option>
+                <option value="price_desc" {% if filters.sort == 'price_desc' %}selected{% endif %}>Price: High to Low</option>
+                <option value="rating" {% if filters.sort == 'rating' %}selected{% endif %}>Best Rated</option>
             </select>
             <button type="submit" class="btn btn-primary">Search</button>
             <a href="{{ url_for('guest.room_listing') }}" class="btn btn-outline">Clear</a>

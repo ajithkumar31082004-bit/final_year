@@ -926,6 +926,8 @@ class ExternalFraudAdapter:
                 "SELECT * FROM rooms WHERE room_id = ?", (room_id,)
             ).fetchone()
         all_bookings = conn.execute("SELECT * FROM bookings").fetchall()
+        all_rooms = conn.execute("SELECT * FROM rooms").fetchall()
+        all_users = conn.execute("SELECT * FROM users").fetchall()
         conn.close()
 
         booking = dict(booking_data)
@@ -949,6 +951,8 @@ class ExternalFraudAdapter:
                 room=room_dict,
                 user=dict(user) if user else {},
                 all_bookings=[dict(b) for b in all_bookings],
+                all_rooms=[dict(r) for r in all_rooms],
+                all_users=[dict(u) for u in all_users],
             )
         except Exception:
             return self.fallback.predict(booking_data)
@@ -1005,7 +1009,85 @@ class ExternalCancellationAdapter:
             "risk_level": str(result.get("risk_level", "Low")).upper(),
             "factors": result.get("key_factors", []),
             "recommendation": result.get("recommendation"),
-            "accuracy": result.get("confidence", "82%"),
+                "accuracy": result.get("confidence", "82%"),
+            }
+
+
+# ------------------------------------------------------------------
+# 7. USER BEHAVIOR PREDICTOR (Behavior Profiling & Offers)
+# ------------------------------------------------------------------
+class UserBehaviorPredictor:
+    def __init__(self):
+        self.profiles = ["Luxury Spender", "Budget Conscious", "Frequent Traveler", "New Guest"]
+
+    def predict_behavior(self, user_id, room_dict=None):
+        if not user_id:
+            return {"profile": "New Guest", "probability": 0.5, "suggested_coupon": None, "reason": "As a welcome gift"}
+
+        conn = get_db()
+        user = conn.execute("SELECT * FROM users WHERE user_id = ?", (user_id,)).fetchone()
+        bookings = conn.execute("SELECT * FROM bookings WHERE user_id = ? AND status IN ('confirmed', 'completed')", (user_id,)).fetchall()
+        coupons = conn.execute("SELECT * FROM coupons WHERE is_active = 1").fetchall()
+        conn.close()
+
+        if not user:
+            return {"profile": "New Guest", "probability": 0.5, "suggested_coupon": None, "reason": "As a welcome gift"}
+
+        b_count = len(bookings)
+        total_spent = sum(b["total_amount"] for b in bookings)
+        avg_spent = total_spent / b_count if b_count > 0 else 0
+
+        profile = "New Guest"
+        prob = 0.5
+
+        if b_count == 0:
+            profile = "New Guest"
+            prob = 0.75
+        elif avg_spent > 12000:
+            profile = "Luxury Spender"
+            prob = 0.60
+        elif b_count >= 3:
+            profile = "Frequent Traveler"
+            prob = 0.85
+        else:
+            profile = "Budget Conscious"
+            prob = 0.80
+
+        suggested = None
+        valid_coupons = [dict(c) for c in coupons]
+        if valid_coupons:
+            if profile == "New Guest":
+                opts = [c for c in valid_coupons if c["discount_type"] == "percentage"]
+                opts.sort(key=lambda x: x["discount_value"], reverse=True)
+                if opts: suggested = opts[0]
+            elif profile == "Luxury Spender":
+                opts = [c for c in valid_coupons if c["discount_type"] == "flat"]
+                opts.sort(key=lambda x: x["discount_value"], reverse=True)
+                if opts: suggested = opts[0]
+            elif profile == "Frequent Traveler":
+                opts = [c for c in valid_coupons if c["max_uses"] > 100]
+                if opts: suggested = opts[0]
+            else:
+                suggested = valid_coupons[0]
+                
+        reason = ""
+        if profile == "New Guest":
+            reason = "As a welcome gift for your first booking"
+        elif profile == "Luxury Spender":
+            reason = "Because you appreciate the finer stays"
+        elif profile == "Frequent Traveler":
+            reason = "To thank you for your continued loyalty"
+        else:
+            reason = "Because we value you"
+
+        if not suggested and valid_coupons:
+            suggested = valid_coupons[0]
+
+        return {
+            "profile": profile,
+            "probability": prob,
+            "reason": reason,
+            "suggested_coupon": suggested
         }
 
 
@@ -1018,6 +1100,7 @@ _pricing_engine = None
 _sentiment_analyzer = None
 _fraud_detector = None
 _cancellation_predictor = None
+_user_behavior_model = None
 
 
 def get_recommendation_model():
@@ -1078,3 +1161,10 @@ def get_cancellation_predictor():
         else:
             _cancellation_predictor = CancellationPredictor()
     return _cancellation_predictor
+
+
+def get_user_behavior_model():
+    global _user_behavior_model
+    if not _user_behavior_model:
+        _user_behavior_model = UserBehaviorPredictor()
+    return _user_behavior_model

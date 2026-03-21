@@ -4,6 +4,7 @@ from app import create_app
 
 print("Creating app...")
 app = create_app("development")
+app.config["WTF_CSRF_ENABLED"] = False
 print("App created.")
 
 with app.test_client() as client:
@@ -14,7 +15,7 @@ with app.test_client() as client:
 
         print("Testing authenticated (Guest)...")
         # Login as guest
-        response = client.post("/auth/login", data={
+        response = client.post("/login", data={
             "email": "rajesh@example.com",
             "password": "Guest@123"
         }, follow_redirects=True)
@@ -26,7 +27,7 @@ with app.test_client() as client:
             print(response.data.decode("utf-8"))
             
         print("Testing authenticated (Admin)...")
-        client.post("/auth/login", data={"email": "anil@blissfulabodes.com", "password": "Admin@123"}, follow_redirects=True)
+        client.post("/login", data={"email": "anil@blissfulabodes.com", "password": "Admin@123"}, follow_redirects=True)
         response = client.get("/")
         print(f"Admin Status: {response.status_code}")
         if response.status_code != 200:

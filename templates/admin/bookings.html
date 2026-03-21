@@ -31,7 +31,7 @@
     <div class="card">
       <div class="table-container">
         <table class="data-table">
-          <thead><tr><th>ID</th><th>Guest</th><th>Room</th><th>Check-in</th><th>Amount</th><th>Status</th><th>Payment</th><th>Actions</th></tr></thead>
+          <thead><tr><th>ID</th><th>Guest</th><th>Room</th><th>Check-in</th><th>Amount</th><th>Status</th><th>Payment</th><th>Special Requests</th><th>Actions</th></tr></thead>
           <tbody>
             {% for b in bookings %}
             <tr>
@@ -42,6 +42,7 @@
               <td>INR {{ "{:,.0f}".format(b.total_amount) }}</td>
               <td><span class="badge badge-{{ 'success' if b.status == 'confirmed' else 'info' if b.status == 'completed' else 'danger' if b.status == 'cancelled' else 'warning' }}">{{ b.status|title }}</span></td>
               <td><span class="badge badge-{{ 'success' if b.payment_status == 'paid' else 'warning' }}">{{ b.payment_status|title }}</span></td>
+              <td style="max-width:220px;white-space:pre-wrap;color:var(--text-medium);">{{ b.special_requests or '—' }}</td>
               <td>
                 <select id="status_{{ b.booking_id }}" class="form-control" style="width:auto;display:inline-block;">
                   <option value="pending" {% if b.status == 'pending' %}selected{% endif %}>Pending</option>

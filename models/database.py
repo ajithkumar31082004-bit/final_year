@@ -133,6 +133,7 @@ def init_db():
             special_requests TEXT,
             fraud_score REAL DEFAULT 0,
             is_flagged INTEGER DEFAULT 0,
+            fraud_flags TEXT DEFAULT '[]',
             cancellation_probability REAL DEFAULT 0,
             qr_code_path TEXT,
             created_at TEXT DEFAULT CURRENT_TIMESTAMP,
@@ -144,6 +145,16 @@ def init_db():
         )
     """
     )
+
+    # Lightweight schema migration for existing DBs
+    try:
+        cols = [r["name"] for r in cursor.execute("PRAGMA table_info(bookings)").fetchall()]
+        if "fraud_flags" not in cols:
+            cursor.execute("ALTER TABLE bookings ADD COLUMN fraud_flags TEXT DEFAULT '[]'")
+        if "special_requests" not in cols:
+            cursor.execute("ALTER TABLE bookings ADD COLUMN special_requests TEXT")
+    except Exception:
+        pass
 
     # Reviews table
     cursor.execute(

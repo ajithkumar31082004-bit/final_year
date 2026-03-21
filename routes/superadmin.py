@@ -123,6 +123,14 @@ def dashboard():
                               WHERE b.is_flagged = 1 OR b.fraud_score > 0.5 
                               ORDER BY b.fraud_score DESC"""
     ).fetchall()
+    flagged_bookings = []
+    for f in flagged:
+        fd = dict(f)
+        try:
+            fd["fraud_flags"] = json.loads(fd.get("fraud_flags") or "[]")
+        except Exception:
+            fd["fraud_flags"] = []
+        flagged_bookings.append(fd)
 
     # System status (simulated)
     system_status = {
@@ -179,7 +187,7 @@ def dashboard():
         all_users=[dict(u) for u in all_users],
         admin_users=[dict(u) for u in admin_users],
         audit_logs=[dict(a) for a in audit_logs],
-        flagged_bookings=[dict(f) for f in flagged],
+        flagged_bookings=flagged_bookings,
         system_status=system_status,
         annual_target=annual_target,
         target_progress=target_progress,
@@ -419,7 +427,7 @@ def ml_analytics():
         },
         {
             "name": "Demand Forecasting",
-            "algorithm": "LSTM Neural Network",
+            "algorithm": "Linear Regression",
             "accuracy": "89%",
             "status": "✅ Active",
         },

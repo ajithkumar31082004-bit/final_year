@@ -48,7 +48,7 @@ class Config:
     # Google Maps
     GOOGLE_MAPS_API_KEY = os.environ.get('GOOGLE_MAPS_API_KEY', 'placeholder_maps_key')
     # Gemini (Chatbot)
-    GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', 'placeholder_gemini_key')
+    GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', 'AIzaSyCB4pOLezxCsJoYge0i6KiikIeOxcpbtD0')
     GEMINI_MODEL = os.environ.get('GEMINI_MODEL', 'gemini-2.5-flash')
 
     # Offers eligibility

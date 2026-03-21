@@ -28,3 +28,5 @@ google-genai
 google-adk
 pydantic
 requests
+
+openai==1.14.0

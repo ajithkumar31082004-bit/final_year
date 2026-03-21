@@ -1,0 +1,62 @@
+<!-- AI Pipeline Visualizer (For IEEE Project Demonstration) -->
+<div class="card" style="margin-top: 2rem; border-color: var(--primary);">
+    <div class="card-header" style="background: rgba(43, 88, 118, 0.1); border-bottom: 2px solid var(--primary);">
+        <span style="font-weight: 700; color: var(--primary);">🧠 Real-Time AI Processing Pipeline</span>
+        <span style="float: right; font-size: 0.8rem; color: var(--text-light);">IEEE Demonstration</span>
+    </div>
+    <div class="card-body">
+        <p style="font-size: 0.85rem; color: var(--text-medium); margin-bottom: 1.5rem;">
+            This booking was processed through our 5-stage AI pipeline automatically.
+        </p>
+        
+        <div class="pipeline-container" style="display: flex; justify-content: space-between; position: relative;">
+            <!-- Connecting Line -->
+            <div style="position: absolute; top: 20px; left: 10%; right: 10%; height: 4px; background: #e0e0e0; z-index: 1;"></div>
+            
+            <!-- Step 1 -->
+            <div class="pipeline-step" style="text-align: center; width: 18%; z-index: 2;">
+                <div style="background: var(--success); color: white; width: 44px; height: 44px; border-radius: 50%; line-height: 44px; font-size: 1.2rem; margin: 0 auto 0.5rem; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                    👤
+                </div>
+                <div style="font-size: 0.75rem; font-weight: 600;">User Input</div>
+                <div style="font-size: 0.65rem; color: var(--text-light); margin-top: 0.25rem;">Data parsed from request (Voice/Text)</div>
+            </div>
+            
+            <!-- Step 2 -->
+            <div class="pipeline-step" style="text-align: center; width: 18%; z-index: 2;">
+                <div style="background: var(--info); color: white; width: 44px; height: 44px; border-radius: 50%; line-height: 44px; font-size: 1.2rem; margin: 0 auto 0.5rem; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                    🛡️
+                </div>
+                <div style="font-size: 0.75rem; font-weight: 600;">Fraud Check</div>
+                <div style="font-size: 0.65rem; color: var(--text-light); margin-top: 0.25rem;">Score: <span style="font-weight:bold;">{{ '{:.2f}'.format(booking.fraud_score | default(0)) }}</span> (Passed)</div>
+            </div>
+            
+            <!-- Step 3 -->
+            <div class="pipeline-step" style="text-align: center; width: 18%; z-index: 2;">
+                <div style="background: #9b59b6; color: white; width: 44px; height: 44px; border-radius: 50%; line-height: 44px; font-size: 1.2rem; margin: 0 auto 0.5rem; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                    📈
+                </div>
+                <div style="font-size: 0.75rem; font-weight: 600;">Demand Forecast</div>
+                <div style="font-size: 0.65rem; color: var(--text-light); margin-top: 0.25rem;">ML Predicted High Demand</div>
+            </div>
+            
+            <!-- Step 4 -->
+            <div class="pipeline-step" style="text-align: center; width: 18%; z-index: 2;">
+                <div style="background: var(--primary); color: white; width: 44px; height: 44px; border-radius: 50%; line-height: 44px; font-size: 1.2rem; margin: 0 auto 0.5rem; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                    💰
+                </div>
+                <div style="font-size: 0.75rem; font-weight: 600;">Dynamic Pricing</div>
+                <div style="font-size: 0.65rem; color: var(--text-light); margin-top: 0.25rem;">Optimized Base Rate: ₹{{ '{:,.0f}'.format(booking.base_amount / (booking.nights | default(1))) }}</div>
+            </div>
+            
+            <!-- Step 5 -->
+            <div class="pipeline-step" style="text-align: center; width: 18%; z-index: 2;">
+                <div style="background: #f39c12; color: white; width: 44px; height: 44px; border-radius: 50%; line-height: 44px; font-size: 1.2rem; margin: 0 auto 0.5rem; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                    ⭐
+                </div>
+                <div style="font-size: 0.75rem; font-weight: 600;">Recommendation</div>
+                <div style="font-size: 0.65rem; color: var(--text-light); margin-top: 0.25rem;">Engine updated preferences</div>
+            </div>
+        </div>
+    </div>
+</div>

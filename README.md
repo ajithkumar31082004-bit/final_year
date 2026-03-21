@@ -20,6 +20,31 @@ Full-stack hotel management and booking platform built with Flask. Includes mult
 - scikit-learn, NumPy, pandas
 - TextBlob, VADER
 
+## AI Models
+
+- Fraud Detection: hybrid rules + ML (RandomForest) trained on booking history; combines rule score with model probability.
+  If a booking is classified as high risk, it is automatically blocked and flagged for administrative review.
+  Medium-risk bookings are sent for manual verification, while low-risk bookings proceed normally.
+
+```text
+Booking Request
+    ↓
+Fraud Detection Engine
+    ↓
+ SAFE      REVIEW      FRAUD
+   ↓          ↓           ↓
+Confirm   Verify     Block + Alert
+```
+- Demand Forecasting: 30-day forecast using linear regression on calendar features with real booking history when available.
+- Dynamic Pricing: rule-based optimization using occupancy, season, timing, and room type.
+- Cancellation Prediction: logistic regression-style scoring using user history and booking signals.
+- Recommendation System: hybrid collaborative + content-based + contextual scoring with ML ranking (logistic regression).
+
+## Viva Quick Answer
+
+My project implements five AI systems: Fraud Detection, Demand Forecasting, Dynamic Pricing, Cancellation Prediction, and a Hybrid Recommendation System to improve security, revenue optimization, and personalization.
+One-line: 5 AI = Security + Prediction + Pricing + Risk + Personalization.
+
 ## Project Structure
 
 - `app.py` - Flask app entry point and routes
@@ -78,4 +103,3 @@ If Razorpay keys are not set, the app runs in demo mode for payments.
 ## Tests
 
 There is a minimal `test_app.py`. Extend as needed.
-

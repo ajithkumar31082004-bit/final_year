@@ -4,17 +4,25 @@
 <div style="background:var(--gradient-dark);padding:2.5rem 0;text-align:center;">
     <h1 style="color:white;">Book {{ room.room_type }}</h1>
     <p style="color:rgba(255,255,255,0.7);">Room {{ room.room_number }} • Floor {{ room.floor }}</p>
+
+
+
+
+
+
 </div>
 
 <div class="container" style="padding:3rem 1.25rem;">
     <div style="display:grid;grid-template-columns:3fr 2fr;gap:2rem;max-width:1100px;margin:0 auto;">
         <!-- Booking Form -->
         <div class="card">
-            <div class="card-header-gradient">
+            <div class="card-header-gradient" style="display:flex; justify-content:space-between; align-items:center;">
                 <span>📋 Booking Details</span>
+                <button type="button" id="voiceBtn" class="btn btn-sm" style="background:rgba(255,255,255,0.2);color:white;border:1px solid rgba(255,255,255,0.4);border-radius:20px;padding:4px 12px;font-size:0.85rem;cursor:pointer;" title="Say e.g. 'Book tomorrow for 2 nights for 2 guests'">🎤 Voice Assistant</button>
             </div>
             <div class="card-body">
                 <form method="POST" id="bookingForm">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
                         <div class="form-group">
                             <label class="form-label">Check-in Date *</label>
@@ -38,21 +46,17 @@
                         <select name="payment_method" class="form-control">
                             <option value="UPI">📱 UPI (GPay/PhonePe/Paytm)</option>
                             <option value="Credit_Card">💳 Credit Card</option>
-                            <option value="Debit_Card">💳 Debit Card</option>
-                            <option value="Net_Banking">🏦 Net Banking</option>
-                            <option value="EMI">💰 EMI (0% for 3 months)</option>
-                            <option value="Cash">💵 Cash at Desk</option>
                         </select>
                     </div>
                     <div class="form-group">
-                        <label class="form-label">Coupon Code</label>
+                        <label class="form-label">Coupon Code (Optional)</label>
                         <div style="display:flex;gap:0.5rem;">
-                            <input type="text" name="coupon_code" id="couponCode" class="form-control" placeholder="Enter code (e.g. WELCOME10)" style="text-transform:uppercase;">
-                            <button type="button" onclick="validateCoupon()" class="btn btn-outline" style="white-space:nowrap;">Apply</button>
+                            <input type="text" name="coupon_code" id="couponCode" class="form-control" placeholder="e.g. SUMMER20" onchange="validateCoupon()">
+                            <button type="button" class="btn btn-secondary" onclick="validateCoupon()">Apply</button>
                         </div>
-                        <div id="couponMsg" style="font-size:0.8rem;margin-top:0.35rem;"></div>
+                        <small id="couponMsg" style="margin-top:0.25rem;display:block;"></small>
                     </div>
-                    {% if current_user and current_user.loyalty_points > 0 %}
+                    {% if current_user.is_authenticated %}
                     <div class="form-group">
                         <label class="form-label" style="display:flex;justify-content:space-between;">
                             Use Loyalty Points
@@ -64,7 +68,7 @@
                     {% else %}<input type="hidden" name="loyalty_points" value="0">{% endif %}
                     <div class="form-group">
                         <label class="form-label">Special Requests</label>
-                        <textarea name="special_requests" class="form-control" placeholder="Early check-in, high floor, dietary requirements..."></textarea>
+                        <textarea name="special_requests" class="form-control" placeholder="Early check-in, high floor, dietary requirements...">{{ special_requests|default('') }}</textarea>
                     </div>
                     <button type="submit" class="btn btn-primary btn-block btn-lg" id="submitBtn">🏨 Confirm Booking</button>
                     <p style="text-align:center;font-size:0.78rem;color:var(--text-light);margin-top:0.75rem;">🔒 Secure booking • 100% verified payments • Instant confirmation</p>
@@ -91,14 +95,12 @@
                 <div class="card-body">
                     <div id="priceLoading" style="text-align:center;color:var(--text-light);padding:1rem;">Select dates to see pricing</div>
                     <div id="priceBreakdown" style="display:none;">
-                        <div id="baseRateRow" style="display:none;justify-content:space-between;padding:0.5rem 0;border-bottom:1px solid rgba(0,0,0,0.06);color:var(--text-light);"><span>Base rate</span><span id="baseRate"></span></div>
-                        <div style="display:flex;justify-content:space-between;padding:0.5rem 0;border-bottom:1px solid rgba(0,0,0,0.06);"><span id="perNightLabel">Per night</span><span id="perNight" style="font-weight:600;"></span></div>
-                        <div id="aiAdjustRow" style="display:none;justify-content:space-between;padding:0.5rem 0;border-bottom:1px solid rgba(0,0,0,0.06);color:var(--info);"><span>AI adjustment</span><span id="aiAdjust"></span></div>
-                        <div style="display:flex;justify-content:space-between;padding:0.5rem 0;border-bottom:1px solid rgba(0,0,0,0.06);"><span>× <span id="nights">0</span> nights</span><span id="baseAmount"></span></div>
+                                                <div style="display:flex;justify-content:space-between;padding:0.5rem 0;border-bottom:1px solid rgba(0,0,0,0.06);"><span id="perNightLabel">Per night</span><span id="perNight" style="font-weight:600;"></span></div>
+                                                <div style="display:flex;justify-content:space-between;padding:0.5rem 0;border-bottom:1px solid rgba(0,0,0,0.06);"><span>× <span id="nights">0</span> nights</span><span id="baseAmount"></span></div>
                         <div id="discountRow" style="display:none;color:var(--success);justify-content:space-between;padding:0.5rem 0;border-bottom:1px solid rgba(0,0,0,0.06);"><span>- Discount</span><span id="discountAmt"></span></div>
                         <div style="display:flex;justify-content:space-between;padding:0.5rem 0;border-bottom:1px solid rgba(0,0,0,0.06);color:var(--text-light);"><span>+ GST (18%)</span><span id="gstAmt"></span></div>
                         <div style="display:flex;justify-content:space-between;padding:0.875rem 0;font-size:1.25rem;font-weight:700;color:var(--primary);"><span>Total</span><span id="totalAmt"></span></div>
-                        <div style="font-size:0.75rem;color:var(--text-muted);text-align:center;margin-top:0.25rem;">🤖 AI-optimized pricing applied</div>
+                        <div style="font-size:0.75rem;color:var(--text-muted);text-align:center;margin-top:0.25rem;">Pricing updates based on availability and dates</div>
                     </div>
                 </div>
             </div>
@@ -133,25 +135,8 @@ function renderPrice(data) {
     const total = taxable + gst;
 
     const perNight = Number(data.per_night || 0);
-    const baseRate = Number(data.base_price || perNight);
-    const baseRateRow = document.getElementById('baseRateRow');
-    const aiAdjustRow = document.getElementById('aiAdjustRow');
     const perNightLabel = document.getElementById('perNightLabel');
-
-    const roundedBase = Math.round(baseRate);
-    const roundedPer = Math.round(perNight);
-    if (roundedBase && roundedPer && roundedBase !== roundedPer) {
-        baseRateRow.style.display = 'flex';
-        document.getElementById('baseRate').textContent = 'INR ' + roundedBase.toLocaleString('en-IN');
-        const delta = roundedPer - roundedBase;
-        aiAdjustRow.style.display = 'flex';
-        document.getElementById('aiAdjust').textContent = (delta >= 0 ? '+ INR ' : '- INR ') + Math.abs(delta).toLocaleString('en-IN');
-        perNightLabel.textContent = 'Per night (AI rate)';
-    } else {
-        baseRateRow.style.display = 'none';
-        aiAdjustRow.style.display = 'none';
-        perNightLabel.textContent = 'Per night';
-    }
+    if (perNightLabel) perNightLabel.textContent = 'Per night';
 
     document.getElementById('perNight').textContent = 'INR ' + perNight.toLocaleString('en-IN');
     document.getElementById('nights').textContent = data.nights;
@@ -256,7 +241,11 @@ document.addEventListener('DOMContentLoaded', function() {
     if (checkinEl.value) {
         const minCheckoutDate = new Date(checkinEl.value);
         minCheckoutDate.setDate(minCheckoutDate.getDate() + 1);
-        checkoutEl.min = fmt(minCheckoutDate);
+        const minCheckoutStr = fmt(minCheckoutDate);
+        checkoutEl.min = minCheckoutStr;
+        if (checkoutEl.value && checkoutEl.value < minCheckoutStr) {
+                checkoutEl.value = minCheckoutStr;
+        }
     } else {
         const tomorrow = new Date(today);
         tomorrow.setDate(tomorrow.getDate() + 1);
@@ -287,5 +276,106 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 </script>
+
+<!-- Voice Booking Script -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const voiceBtn = document.getElementById('voiceBtn');
+    if (!voiceBtn) return;
+    
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+        voiceBtn.style.display = 'none';
+        return;
+    }
+    
+    const recognition = new SpeechRecognition();
+    recognition.continuous = false;
+    recognition.lang = 'en-IN';
+    recognition.interimResults = false;
+    
+    let isRecording = false;
+    
+    voiceBtn.addEventListener('click', () => {
+        if (isRecording) {
+            recognition.stop();
+            return;
+        }
+        recognition.start();
+        voiceBtn.innerHTML = '🔴 Listening...';
+        voiceBtn.style.background = 'rgba(255,0,0,0.6)';
+        isRecording = true;
+    });
+    
+    recognition.onresult = function(event) {
+        const text = event.results[0][0].transcript.toLowerCase();
+        let handled = false;
+        const today = new Date();
+        const fmt = d => d.toISOString().split('T')[0];
+        
+        const guestMatch = text.match(/(one|two|three|four|five|six|seven|eight|nine|ten|\d+)\s*guest/);
+        if (guestMatch) {
+            const guestSelect = document.querySelector('select[name="num_guests"]');
+            if(guestSelect) {
+                const numMap = {'one':'1','two':'2','three':'3','four':'4','five':'5','six':'6','seven':'7','eight':'8','nine':'9','ten':'10'};
+                let val = numMap[guestMatch[1]] || guestMatch[1];
+                let opts = Array.from(guestSelect.options).map(o=>o.value);
+                if(opts.includes(val)) {
+                    guestSelect.value = val;
+                    handled = true;
+                }
+            }
+        }
+        
+        let ciDate = new Date();
+        if (text.includes('tomorrow')) {
+            ciDate.setDate(ciDate.getDate() + 1);
+            document.getElementById('checkin').value = fmt(ciDate);
+            handled = true;
+        } else if (text.includes('today')) {
+            document.getElementById('checkin').value = fmt(ciDate);
+            handled = true;
+        }
+        
+        const nightsMatch = text.match(/for (one|two|three|four|five|six|seven|eight|nine|ten|\d+)\s*night/);
+        if (nightsMatch) {
+            const numMap = {'one':1,'two':2,'three':3,'four':4,'five':5,'six':6,'seven':7,'eight':8,'nine':9,'ten':10};
+            let n = parseInt(numMap[nightsMatch[1]] || nightsMatch[1]);
+            let startDate = document.getElementById('checkin').value ? new Date(document.getElementById('checkin').value) : ciDate;
+            startDate.setDate(startDate.getDate() + n);
+            document.getElementById('checkout').value = fmt(startDate);
+            handled = true;
+        }
+        
+        if (handled) {
+            alert('Voice Assistant: I have updated the booking form for you! ("' + text + '")');
+            if (typeof calculatePrice === 'function') calculatePrice();
+        } else {
+            alert('Voice Assistant: Sorry, I did not understand: "' + text + '". Try saying "Book from tomorrow for 2 nights for 2 guests".');
+        }
+    };
+    
+    recognition.onspeechend = function() {
+        recognition.stop();
+        resetBtn();
+    };
+    
+    recognition.onerror = function(event) {
+        console.error('Speech error:', event.error);
+        if (event.error !== 'no-speech') {
+            alert('Voice Assistant Error: ' + event.error);
+        }
+        resetBtn();
+    };
+    
+    function resetBtn() {
+        isRecording = false;
+        voiceBtn.innerHTML = '🎤 Voice Assistant';
+        voiceBtn.style.background = 'rgba(255,255,255,0.2)';
+    }
+});
+</script>
 {% endblock %}
+
+
 

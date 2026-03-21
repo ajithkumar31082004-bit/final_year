@@ -11,6 +11,7 @@
       <div class="card-header"><span>Review for Booking {{ booking.booking_id }}</span></div>
       <div class="card-body">
         <form method="POST">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <div class="form-group">
             <label class="form-label">Overall Rating</label>
             <select name="rating" class="form-control">

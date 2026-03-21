@@ -306,7 +306,16 @@ def _create_booking(user_id: Optional[str], agent_user_id: str, room, check_in, 
     fraud_result = _fraud_check_booking(
         user_id, agent_user_id, total_amount, guests, "pay_at_hotel"
     )
-    is_flagged = 1 if fraud_result.get("risk_level") == "HIGH" else 0
+    fraud_score = float(fraud_result.get("fraud_score", 0) or 0)
+    risk_level = str(fraud_result.get("risk_level", "")).upper()
+    fraud_flags = fraud_result.get("flags") or []
+    if not isinstance(fraud_flags, list):
+        fraud_flags = [str(fraud_flags)]
+    is_flagged = 1 if (
+        fraud_result.get("is_suspicious")
+        or fraud_score >= 0.35
+        or risk_level in ("REVIEW", "FRAUD", "HIGH")
+    ) else 0
     status = "pending" if is_flagged else "confirmed"
 
     booking_id = f"BK{datetime.now().strftime('%Y%m%d')}{uuid.uuid4().hex[:6].upper()}"
@@ -315,8 +324,8 @@ def _create_booking(user_id: Optional[str], agent_user_id: str, room, check_in, 
         """INSERT INTO bookings
         (booking_id, user_id, room_id, room_number, check_in, check_out, num_guests,
          base_amount, gst_amount, total_amount, status, payment_status, payment_method,
-         fraud_score, is_flagged)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', 'pay_at_hotel', ?, ?)""",
+         fraud_score, is_flagged, fraud_flags)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', 'pay_at_hotel', ?, ?, ?)""",
         (
             booking_id,
             user_id,
@@ -331,6 +340,7 @@ def _create_booking(user_id: Optional[str], agent_user_id: str, room, check_in, 
             status,
             fraud_result.get("fraud_score", 0),
             is_flagged,
+            json.dumps(fraud_flags),
         ),
     )
     conn.execute(
@@ -609,6 +619,27 @@ def detect_intent(prompt: str) -> str:
     ):
         return "info"
     return "search"
+
+
+def detect_emotion(prompt: str) -> str:
+    text = _normalize(prompt)
+    if any(k in text for k in ["tired", "exhausted", "sleepy", "fatigued", "burnout", "stress"]):
+        return "tired"
+    if any(k in text for k in ["stressed", "anxious", "overworked", "overwhelm", "frustrated"]):
+        return "stressed"
+    if any(k in text for k in ["happy", "excited", "celebrating", "honeymoon", "anniversary", "birthday", "special occasion"]):
+        return "celebrating"
+    return "neutral"
+
+
+def _emotion_suggestion(emotion: str) -> str:
+    if emotion == "tired":
+        return "I can see you're feeling tired. I highly recommend our Executive Suite with a deep soaking tub and blackout curtains for maximum relaxation. "
+    if emotion == "stressed":
+        return "Need to unwind? Our VIP Suite includes complimentary spa access to melt the stress away. "
+    if emotion == "celebrating":
+        return "Celebrating a special occasion? Our Couple Suite is perfect for a romantic and unforgettable getaway! "
+    return ""
 
 
 def extract_hotel_name_from_booking_request(prompt: str) -> str:
@@ -959,14 +990,10 @@ _runtime = AgentRuntime()
 
 
 def get_agent_status() -> Dict[str, Any]:
-    if _runtime.available:
-        return {"available": True, "message": ""}
-    if _get_gemini_api_key():
-        return {
-            "available": True,
-            "message": "Live search unavailable. Using Gemini fallback mode.",
-        }
-    return {"available": False, "message": _runtime.error}
+    from ml_models.openai_agent import openai_agent
+    if openai_agent.is_configured():
+        return {"available": True, "message": "Unified AI Decision Layer Active (OpenAI)"}
+    return {"available": False, "message": "Set OPENAI_API_KEY in environment to enable the AI Agent."}
 
 
 def handle_agent_message(
@@ -976,10 +1003,43 @@ def handle_agent_message(
     session_id: str,
     logged_in_user_id: Optional[str] = None,
 ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
-    intent = detect_intent(prompt)
+    
+    # --- ENTER OPENAI DECISION LAYER ---
+    from ml_models.openai_agent import openai_agent
+    
+    ai_decision = openai_agent.handle_message(
+        prompt, 
+        logged_in_user_id or agent_user_id, 
+        booking_state
+    )
+    
+    text_prefix = ""
+    if "fraud_assessment" in ai_decision:
+        fraud = ai_decision["fraud_assessment"]
+        text_prefix += f"🛡️ [Stripe/Sift API] Fraud Risk evaluated as {fraud.get('risk_assessment').upper()}.\n\n"
+    if "aws_recommendation" in ai_decision:
+        rec = ai_decision["aws_recommendation"]
+        text_prefix += f"🎯 [AWS Personalize] AI Suggests {rec.get('recommended_tier').upper()} tier for you.\n\n"
+        
+    # Apply OpenAI's state mutations
+    if ai_decision.get("state_updates"):
+        booking_state.update(ai_decision["state_updates"])
+    
+    # Mix AI conversational response with logical steps
+    emotion_prefix = text_prefix
+    if ai_decision.get("text") and "Error contacting" not in ai_decision["text"]:
+        emotion_prefix += ai_decision["text"] + "\n\n"
+    else:
+        emotion = detect_emotion(prompt)
+        emotion_prefix += _emotion_suggestion(emotion)
+        
+    intent = booking_state.get("intent") or detect_intent(prompt)
+    
+    if emotion_prefix and intent == "search" and not booking_state.get("active"):
+        intent = "recommend"
 
     if (booking_state.get("active") or intent == "book") and not logged_in_user_id:
-        return {"type": "text", "text": "Please log in to book a room."}, booking_state
+        return {"type": "text", "text": emotion_prefix + "Please log in to book a room."}, booking_state
     if intent == "cancel" and not logged_in_user_id:
         return {"type": "text", "text": "Please log in to manage bookings."}, booking_state
 
@@ -987,21 +1047,30 @@ def handle_agent_message(
         text, new_state, extra = process_booking_step(
             prompt, booking_state, logged_in_user_id, agent_user_id
         )
-        payload = {"type": "booking", "text": text}
+        payload = {"type": "booking", "text": emotion_prefix + text}
         payload.update(extra)
         return payload, new_state
 
     if intent == "check_room":
-        return check_room_availability(prompt), booking_state
+        res = check_room_availability(prompt)
+        if emotion_prefix and isinstance(res, dict) and "text" in res:
+            res["text"] = emotion_prefix + "\n\n" + res["text"]
+        return res, booking_state
 
     if intent == "price":
-        return get_room_prices(), booking_state
+        res = get_room_prices()
+        if emotion_prefix and isinstance(res, dict) and "text" in res:
+            res["text"] = emotion_prefix + "\n\n" + res["text"]
+        return res, booking_state
 
     if intent == "recommend":
-        return recommend_rooms(logged_in_user_id, agent_user_id), booking_state
+        res = recommend_rooms(logged_in_user_id, agent_user_id)
+        if emotion_prefix and isinstance(res, dict) and "text" in res:
+            res["text"] = emotion_prefix + "\n\n" + res["text"]
+        return res, booking_state
 
     if intent == "info":
-        return {"type": "text", "text": _hotel_information()}, booking_state
+        return {"type": "text", "text": emotion_prefix + _hotel_information()}, booking_state
 
     if intent == "cancel":
         booking_id = _extract_booking_id(prompt)

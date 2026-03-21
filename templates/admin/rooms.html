@@ -76,6 +76,7 @@
       <button class="modal-close" onclick="document.getElementById('roomModal').classList.remove('show')">&times;</button>
     </div>
     <form method="POST" action="{{ url_for('admin.create_room') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
         <div class="form-group"><label class="form-label">Room Number</label><input name="room_number" class="form-control" placeholder="S201" required></div>
         <div class="form-group"><label class="form-label">Floor</label><input type="number" name="floor" class="form-control" value="1" min="1" max="20"></div>

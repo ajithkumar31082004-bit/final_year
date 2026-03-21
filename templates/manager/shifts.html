@@ -30,6 +30,7 @@
       <div class="card-header"><span>Create Shift</span></div>
       <div class="card-body">
         <form method="POST" style="display:grid;grid-template-columns:repeat(5,1fr);gap:1rem;">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <div class="form-group"><label class="form-label">Staff</label>
             <select name="staff_id" class="form-control">
               {% for s in staff_list %}

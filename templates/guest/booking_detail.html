@@ -1,4 +1,4 @@
-﻿{% extends "base.html" %}
+{% extends "base.html" %}
 {% block title %}Booking {{ booking.booking_id }} - Blissful Abodes{% endblock %}
 {% block content %}
 <div style="background:var(--gradient-dark);padding:3rem 0;text-align:center;">
@@ -25,6 +25,17 @@
     </div>
 
     <div class="card" style="margin-bottom:1.5rem;">
+      <div class="card-header"><span>Special Requests</span></div>
+      <div class="card-body">
+        {% if booking.special_requests %}
+        <div style="color:var(--text-dark);white-space:pre-wrap;">{{ booking.special_requests }}</div>
+        {% else %}
+        <div style="color:var(--text-light);">No special requests were provided.</div>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:1.5rem;">
       <div class="card-header"><span>Price Breakdown</span></div>
       <div class="card-body">
         <div style="display:flex;justify-content:space-between;padding:0.4rem 0;">
@@ -42,7 +53,9 @@
       </div>
     </div>
 
-    <div style="display:flex;gap:0.75rem;flex-wrap:wrap;">
+    {% include 'guest/pipeline_visualizer.html' %}
+
+    <div style="display:flex;gap:0.75rem;flex-wrap:wrap;margin-top:1.5rem;">
       <a class="btn btn-outline" href="{{ url_for('guest.my_bookings') }}">Back to My Bookings</a>
       <a class="btn btn-primary" href="{{ url_for('guest.download_invoice', booking_id=booking.booking_id) }}">Download GST Invoice</a>
       {% if booking.payment_status != 'paid' %}

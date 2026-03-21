@@ -18,6 +18,9 @@ from flask import (
 import uuid
 import json
 from datetime import datetime, timedelta
+import uuid
+import json
+from datetime import datetime, timedelta
 from functools import wraps
 from models.database import get_db
 from ml_models.models import (
@@ -26,6 +29,7 @@ from ml_models.models import (
     get_demand_model,
     get_cancellation_predictor,
     get_fraud_detector,
+    get_user_behavior_model,
 )
 from services.email_service import (
     send_booking_confirmation,
@@ -227,6 +231,23 @@ def room_listing():
     max_price = request.args.get("max_price", "")
     sort_by = request.args.get("sort", "price_asc")
 
+    # Auto-fill dates if missing/invalid so rooms page can show dynamic pricing
+    today = datetime.now().date()
+    def _parse_date(val):
+        try:
+            return datetime.strptime(val, "%Y-%m-%d").date()
+        except Exception:
+            return None
+
+    ci_date = _parse_date(check_in)
+    co_date = _parse_date(check_out)
+    if not ci_date:
+        ci_date = today + timedelta(days=1)
+        check_in = ci_date.strftime("%Y-%m-%d")
+    if not co_date or co_date <= ci_date:
+        co_date = ci_date + timedelta(days=1)
+        check_out = co_date.strftime("%Y-%m-%d")
+
     conn = get_db()
     query = 'SELECT * FROM rooms WHERE is_active = 1 AND status = "available"'
     params = []
@@ -237,16 +258,18 @@ def room_listing():
     if guests:
         query += " AND max_guests >= ?"
         params.append(guests)
-    if max_price:
+    use_dynamic_pricing = bool(check_in and check_out)
+    if max_price and not use_dynamic_pricing:
         query += " AND current_price <= ?"
         params.append(float(max_price))
 
-    if sort_by == "price_asc":
-        query += " ORDER BY current_price ASC"
-    elif sort_by == "price_desc":
-        query += " ORDER BY current_price DESC"
-    elif sort_by == "rating":
-        query += " ORDER BY current_price DESC"
+    if not use_dynamic_pricing:
+        if sort_by == "price_asc":
+            query += " ORDER BY current_price ASC"
+        elif sort_by == "price_desc":
+            query += " ORDER BY current_price DESC"
+        elif sort_by == "rating":
+            query += " ORDER BY current_price DESC"
 
     rooms = conn.execute(query, params).fetchall()
 
@@ -330,6 +353,22 @@ def room_listing():
         rd["available_count"] = type_counts.get(rd["room_type"], 0)
         rooms_list.append(rd)
 
+    if use_dynamic_pricing:
+        if max_price:
+            try:
+                max_price_val = float(max_price)
+                rooms_list = [
+                    r for r in rooms_list if (r.get("dynamic_price") or 0) <= max_price_val
+                ]
+            except Exception:
+                pass
+        if sort_by == "price_asc":
+            rooms_list.sort(key=lambda r: r.get("dynamic_price") or r.get("current_price") or 0)
+        elif sort_by == "price_desc":
+            rooms_list.sort(key=lambda r: r.get("dynamic_price") or r.get("current_price") or 0, reverse=True)
+        elif sort_by == "rating":
+            rooms_list.sort(key=lambda r: r.get("dynamic_price") or r.get("current_price") or 0, reverse=True)
+
     return render_template(
         "public/rooms.html",
         rooms=rooms_list,
@@ -341,6 +380,7 @@ def room_listing():
             "check_out": check_out,
             "guests": guests,
             "max_price": max_price,
+            "sort": sort_by,
         },
         room_types=["Single", "Double", "Family", "Couple", "VIP Suite"],
     )
@@ -426,7 +466,11 @@ def book_room(room_id):
     if request.method == "POST":
         if room_dict.get("status") != "available":
             flash("This room is not available right now.", "danger")
-            return render_template("guest/book_room.html", room=room_dict)
+            return render_template(
+                "guest/book_room.html",
+                room=room_dict,
+                special_requests=request.form.get("special_requests", ""),
+            )
         check_in = request.form.get("check_in")
         check_out = request.form.get("check_out")
         num_guests = safe_int(request.form.get("num_guests", 1), 1)
@@ -438,18 +482,30 @@ def book_room(room_id):
         # Validation
         if not check_in or not check_out:
             flash("Please select check-in and check-out dates.", "danger")
-            return render_template("guest/book_room.html", room=room_dict)
+            return render_template(
+                "guest/book_room.html",
+                room=room_dict,
+                special_requests=special_requests,
+            )
 
         ci = datetime.strptime(check_in, "%Y-%m-%d")
         co = datetime.strptime(check_out, "%Y-%m-%d")
 
         if ci < datetime.now():
             flash("Check-in date cannot be in the past.", "danger")
-            return render_template("guest/book_room.html", room=room_dict)
+            return render_template(
+                "guest/book_room.html",
+                room=room_dict,
+                special_requests=special_requests,
+            )
 
         if co <= ci:
             flash("Check-out must be after check-in.", "danger")
-            return render_template("guest/book_room.html", room=room_dict)
+            return render_template(
+                "guest/book_room.html",
+                room=room_dict,
+                special_requests=special_requests,
+            )
 
         nights = (co - ci).days
         days_until = (ci.date() - datetime.now().date()).days
@@ -540,12 +596,91 @@ def book_room(room_id):
                 "created_at": datetime.now().isoformat(),
             }
         )
-
-        if fraud_result["should_block"]:
-            flash(
-                "Your booking could not be processed. Please contact support.", "danger"
+        fraud_score = float(fraud_result.get("fraud_score", 0) or 0)
+        risk_level = str(fraud_result.get("risk_level", "")).upper()
+        fraud_flags = fraud_result.get("flags") or []
+        if not isinstance(fraud_flags, list):
+            fraud_flags = [str(fraud_flags)]
+        is_high_risk = bool(
+            fraud_result.get("should_block")
+            or risk_level in ("FRAUD", "HIGH")
+        )
+        is_medium_risk = bool(
+            not is_high_risk
+            and (
+                fraud_result.get("is_suspicious")
+                or fraud_score >= 0.35
+                or risk_level in ("REVIEW",)
             )
-            return render_template("guest/book_room.html", room=room_dict)
+        )
+        is_flagged = 1 if (is_high_risk or is_medium_risk) else 0
+
+        if is_high_risk:
+            booking_id = (
+                f"BK{datetime.now().strftime('%Y%m%d')}{uuid.uuid4().hex[:6].upper()}"
+            )
+            conn = get_db()
+            conn.execute(
+                """INSERT INTO bookings 
+                (booking_id, user_id, room_id, room_number, check_in, check_out, num_guests,
+                 base_amount, gst_amount, discount_amount, total_amount, coupon_code,
+                 loyalty_points_used, loyalty_points_earned, status, payment_status, payment_method,
+                 special_requests, fraud_score, is_flagged, fraud_flags, cancellation_probability)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    booking_id,
+                    user["user_id"],
+                    room_id,
+                    room_dict["room_number"],
+                    check_in,
+                    check_out,
+                    num_guests,
+                    base_amount,
+                    gst,
+                    discount_amount + loyalty_discount,
+                    total_amount,
+                    coupon_code or None,
+                    pts_to_use,
+                    0,
+                    "blocked",
+                    "blocked",
+                    payment_method,
+                    special_requests or "",
+                    fraud_score,
+                    1,
+                    json.dumps(fraud_flags),
+                    0,
+                ),
+            )
+
+            reason_text = ", ".join(fraud_flags) if fraud_flags else "High-risk anomaly"
+            admins = conn.execute(
+                "SELECT user_id FROM users WHERE role IN ('admin','superadmin') AND is_active = 1"
+            ).fetchall()
+            for a in admins:
+                conn.execute(
+                    """INSERT INTO notifications (notification_id, user_id, title, message, notification_type, action_url)
+                               VALUES (?, ?, ?, ?, 'danger', ?)""",
+                    (
+                        str(uuid.uuid4()),
+                        a["user_id"],
+                        "High-Risk Booking Blocked",
+                        f"Booking {booking_id} blocked by fraud detection (score {fraud_score}). Reasons: {reason_text}.",
+                        "/admin/bookings",
+                    ),
+                )
+            conn.commit()
+            conn.close()
+
+            flash(
+                "Your booking was blocked for security reasons. Please contact support.",
+                "danger",
+            )
+            return render_template(
+                "guest/book_room.html",
+                room=room_dict,
+                special_requests=special_requests,
+            )
 
         # Cancellation prediction
         cancel_pred = get_cancellation_predictor()
@@ -571,7 +706,10 @@ def book_room(room_id):
         is_cash = str(payment_method).lower() in ["cash", "cash_at_desk", "cash at desk"]
         status = "confirmed" if is_cash else "pending"
         payment_status = "paid" if is_cash else "pending"
-        is_flagged = 1 if fraud_result.get("fraud_score", 0) >= 35 else 0
+        if is_medium_risk:
+            status = "pending_verification"
+            payment_status = "pending"
+            is_cash = False
 
         conn = get_db()
         conn.execute(
@@ -579,8 +717,8 @@ def book_room(room_id):
             (booking_id, user_id, room_id, room_number, check_in, check_out, num_guests,
              base_amount, gst_amount, discount_amount, total_amount, coupon_code,
              loyalty_points_used, loyalty_points_earned, status, payment_status, payment_method,
-             special_requests, fraud_score, is_flagged, cancellation_probability)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+             special_requests, fraud_score, is_flagged, fraud_flags, cancellation_probability)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 booking_id,
                 user["user_id"],
@@ -600,8 +738,9 @@ def book_room(room_id):
                 payment_status,
                 payment_method,
                 special_requests or "",
-                fraud_result["fraud_score"],
+                fraud_score,
                 is_flagged,
+                json.dumps(fraud_flags),
                 cancel_result["cancellation_probability"],
             ),
         )
@@ -612,21 +751,97 @@ def book_room(room_id):
             ("occupied" if is_cash else "reserved", room_id),
         )
 
+        # Special requests -> service request + notifications
+        special_requests_clean = (special_requests or "").strip()
+        if special_requests_clean:
+            req_id = str(uuid.uuid4())
+            conn.execute(
+                """INSERT INTO service_requests
+                (request_id, user_id, room_id, room_number, request_type, details)
+                VALUES (?, ?, ?, ?, ?, ?)""",
+                (
+                    req_id,
+                    user["user_id"],
+                    room_id,
+                    room_dict["room_number"],
+                    "special_request",
+                    special_requests_clean,
+                ),
+            )
+
+            staff_users = conn.execute(
+                """SELECT user_id, role FROM users
+                   WHERE role IN ('staff','manager','admin','superadmin')
+                   AND is_active = 1"""
+            ).fetchall()
+            for s in staff_users:
+                role = s["role"]
+                if role in ("admin", "superadmin"):
+                    action_url = "/admin/bookings"
+                elif role == "manager":
+                    action_url = "/manager/dashboard"
+                else:
+                    action_url = "/staff/dashboard"
+                conn.execute(
+                    """INSERT INTO notifications
+                    (notification_id, user_id, title, message, notification_type, action_url)
+                    VALUES (?, ?, ?, ?, 'warning', ?)""",
+                    (
+                        str(uuid.uuid4()),
+                        s["user_id"],
+                        "New Special Request",
+                        f"Booking {booking_id} (Room {room_dict['room_number']}): {special_requests_clean}",
+                        action_url,
+                    ),
+                )
+                conn.execute(
+                    """INSERT INTO messages (message_id, sender_id, recipient_id, content)
+                    VALUES (?, ?, ?, ?)""",
+                    (
+                        str(uuid.uuid4()),
+                        user["user_id"],
+                        s["user_id"],
+                        f"Special request for booking {booking_id} (Room {room_dict['room_number']}): {special_requests_clean}",
+                    ),
+                )
+
+            conn.execute(
+                """INSERT INTO notifications
+                (notification_id, user_id, title, message, notification_type, action_url)
+                VALUES (?, ?, ?, ?, 'info', ?)""",
+                (
+                    str(uuid.uuid4()),
+                    user["user_id"],
+                    "Special Request Received",
+                    "We received your special request and shared it with our team.",
+                    f"/guest/booking/{booking_id}",
+                ),
+            )
+
         # Add notification for guest
+        if is_medium_risk:
+            guest_title = "Booking Pending Verification"
+            guest_message = (
+                f"Your booking {booking_id} is under manual verification. We will update you shortly."
+            )
+        else:
+            guest_title = "Booking Created"
+            guest_message = f'Room {room_dict["room_number"]} reserved for {check_in} - {check_out}.'
         conn.execute(
             """INSERT INTO notifications (notification_id, user_id, title, message, notification_type, action_url)
                        VALUES (?, ?, ?, ?, 'info', ?)""",
             (
                 str(uuid.uuid4()),
                 user["user_id"],
-                "Booking Created",
-                f'Room {room_dict["room_number"]} reserved for {check_in} - {check_out}.',
+                guest_title,
+                guest_message,
                 f"/guest/booking/{booking_id}",
             ),
         )
 
         # Flag suspicious bookings for admin
         if is_flagged:
+            reason_text = ", ".join(fraud_flags) if fraud_flags else "Rule-based anomaly"
             admins = conn.execute(
                 "SELECT user_id FROM users WHERE role IN ('admin','superadmin') AND is_active = 1"
             ).fetchall()
@@ -638,13 +853,20 @@ def book_room(room_id):
                         str(uuid.uuid4()),
                         a["user_id"],
                         "Suspicious Booking",
-                        f"Booking {booking_id} flagged by fraud detection (score {fraud_result['fraud_score']}).",
+                        f"Booking {booking_id} flagged by fraud detection (score {fraud_score}, risk {risk_level}). Reasons: {reason_text}.",
                         "/admin/bookings",
                     ),
                 )
 
         conn.commit()
         conn.close()
+
+        if is_medium_risk:
+            flash(
+                "Your booking is under manual verification. We will notify you once it is approved.",
+                "warning",
+            )
+            return redirect(url_for("guest.booking_detail", booking_id=booking_id))
 
         if is_cash:
             # Update user loyalty points and coupon usage immediately
@@ -721,7 +943,13 @@ def book_room(room_id):
         )
         return redirect(url_for("guest.payment_page", booking_id=booking_id))
 
-    return render_template("guest/book_room.html", room=room_dict)
+    user = get_current_user()
+    user_insights = None
+    if user:
+        behavior_model = get_user_behavior_model()
+        user_insights = behavior_model.predict_behavior(user["user_id"], room_dict)
+
+    return render_template("guest/book_room.html", room=room_dict, user_insights=user_insights)
 
 
 @guest_bp.route("/guest/bookings")
@@ -1223,6 +1451,75 @@ def validate_coupon():
             "discount_value": coupon["discount_value"],
             "discount_amount": round(discount, 0),
             "message": f"Coupon applied! You save INR {discount:,.0f}",
+        }
+    )
+
+
+@guest_bp.route("/api/price-calculator", methods=["POST"])
+@login_required
+def price_calculator():
+    data = request.json or {}
+    room_type = data.get("room_type", "")
+    room_id = data.get("room_id", "")
+    check_in = data.get("check_in", "")
+    check_out = data.get("check_out", "")
+
+    if not room_type or not check_in or not check_out:
+        return jsonify({"error": "Missing required fields"}), 400
+
+    try:
+        ci = datetime.strptime(check_in, "%Y-%m-%d")
+        co = datetime.strptime(check_out, "%Y-%m-%d")
+    except Exception:
+        return jsonify({"error": "Invalid date format"}), 400
+
+    if co <= ci:
+        return jsonify({"error": "Check-out must be after check-in"}), 400
+
+    nights = (co - ci).days
+    days_until = (ci.date() - datetime.now().date()).days
+
+    conn = get_db()
+    occ = conn.execute(
+        "SELECT COUNT(*) FROM rooms WHERE status IN ('occupied','reserved')"
+    ).fetchone()[0]
+    total_rooms = conn.execute("SELECT COUNT(*) FROM rooms").fetchone()[0]
+    occ_pct = round(occ / max(total_rooms, 1) * 100, 1)
+    base_price = None
+    if room_id:
+        row = conn.execute(
+            "SELECT current_price FROM rooms WHERE room_id = ?", (room_id,)
+        ).fetchone()
+        if row:
+            base_price = row["current_price"]
+    conn.close()
+
+    pricing_engine = get_pricing_engine()
+    try:
+        pricing = pricing_engine.calculate_price(
+            room_type,
+            check_in,
+            occ_pct,
+            days_until,
+            base_price=base_price,
+        )
+    except Exception:
+        return jsonify({"error": "Pricing engine error"}), 500
+
+    per_night = pricing.get("final_price") or 0
+    base_amount = per_night * nights
+
+    return jsonify(
+        {
+            "room_type": room_type,
+            "check_in": check_in,
+            "check_out": check_out,
+            "nights": nights,
+            "per_night": per_night,
+            "base_amount": round(base_amount, 0),
+            "base_price": pricing.get("base_price", base_price),
+            "rules_applied": pricing.get("rules_applied", []),
+            "occupancy_pct": occ_pct,
         }
     )
 

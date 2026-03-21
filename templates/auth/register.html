@@ -9,6 +9,7 @@
             <p style="color:var(--text-light);font-size:0.9rem;">Join Blissful Abodes & start earning rewards!</p>
         </div>
         <form method="POST" action="{{ url_for('auth.register') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
                 <div class="form-group">
                     <label class="form-label">First Name</label>

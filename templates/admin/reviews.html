@@ -1,4 +1,4 @@
-﻿{% extends "base.html" %}
+{% extends "base.html" %}
 {% block title %}Reviews - Admin{% endblock %}
 {% block content %}
 <div class="dashboard-layout">
@@ -28,6 +28,23 @@
       </div>
     </div>
 
+    <!-- AI Insights Summary Card -->
+    <div class="card" style="margin-bottom: 1.5rem; background: rgba(220,53,69,0.04); border-left: 4px solid var(--danger);">
+      <div class="card-body">
+        <h3 style="color: var(--danger); margin-bottom: 0.5rem;"><i class="fa-solid fa-robot"></i> AI Review Insights</h3>
+        <p style="font-size: 0.9rem; color: var(--text-medium);">The following issues require immediate attention based on recent guest feedback:</p>
+        <ul style="margin-top: 0.5rem; font-size: 0.9rem; list-style-type: none; padding-left: 0;">
+          {% for r in reviews if r.ai_insights %}
+              <li style="margin-bottom: 0.35rem;">⚠️ <strong>{{ r.first_name }} {{ r.last_name }} (Room {{ r.room_number }}):</strong> <span style="color:var(--danger);font-weight:600;">{{ r.ai_insights }}</span> 
+                <button class="btn btn-sm btn-outline" style="padding: 1px 6px; font-size: 0.7rem; margin-left: 0.5rem;" onclick="respondReview('{{ r.review_id }}')">Prioritize Response</button>
+              </li>
+          {% else %}
+             <li style="color: var(--success);"><i class="fa-solid fa-check-circle"></i> No urgent complaints detected by AI. All clear!</li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+
     <div class="card">
       <div class="table-container">
         <table class="data-table">
@@ -38,7 +55,14 @@
               <td>{{ r.first_name }} {{ r.last_name }}</td>
               <td>{{ r.room_number }} ({{ r.room_type }})</td>
               <td>{{ r.overall_rating }}</td>
-              <td style="max-width:360px;">{{ r.comment }}</td>
+              <td style="max-width:360px;">
+                {{ r.comment }}
+                {% if r.ai_insights %}
+                <div style="margin-top: 5px; font-size: 0.8rem; color: var(--danger); font-weight: 600;">
+                  <i class="fa-solid fa-robot"></i> [AI: {{ r.ai_insights }}]
+                </div>
+                {% endif %}
+              </td>
               <td><span class="badge badge-{{ 'success' if r.sentiment == 'positive' else 'danger' if r.sentiment == 'negative' else 'info' }}">{{ r.sentiment|title }}</span></td>
               <td>
                 <button class="btn btn-sm btn-outline" onclick="reviewAction('{{ r.review_id }}','feature')">Feature</button>

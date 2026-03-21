@@ -1,4 +1,4 @@
-"""
+﻿"""
 Blissful Abodes Hotel Management System
 Main Flask Application Entry Point
 """
@@ -441,6 +441,43 @@ def create_app(config_name="default"):
     except Exception as e:
         print(f"[SCHEDULER] Could not start scheduler: {e}")
 
+    # Auto-train ALL ML Models on startup
+    try:
+        from models.database import get_db
+        conn = get_db()
+        _rooms = [dict(r) for r in conn.execute('SELECT * FROM rooms WHERE is_active=1').fetchall()]
+        _bks = [dict(r) for r in conn.execute('SELECT * FROM bookings').fetchall()]
+        _users = [dict(r) for r in conn.execute('SELECT * FROM users').fetchall()]
+        conn.close()
+
+        # 1. Recommender
+        from ml_models.ai_recommender import train_recommender, _load_model as _l1, _MODEL as _m1
+        _l1()
+        import ml_models.ai_recommender as _rm1
+        if _rm1._MODEL is None: print(f"[ML] Recommender: {train_recommender(_rooms, _bks, _users).get('message')}")
+        else: print(f"[ML] Recommender loaded.")
+
+        # 2. Demand Forecast
+        from ml_models.ai_demand_forecast import load_or_train_model as _l2
+        _l2([{'created_at': b.get('created_at')} for b in _bks if b.get('created_at')])
+        print(f"[ML] Demand Forecasting loaded.")
+
+        # 3. Cancellation
+        from ml_models.ai_cancellation import train_cancellation_model, _load_model as _l3
+        _l3()
+        import ml_models.ai_cancellation as _cm3
+        if _cm3._MODEL is None: print(f"[ML] Cancellation: {train_cancellation_model(_bks, _users).get('message')}")
+        else: print(f"[ML] Cancellation loaded.")
+
+        # 4. Dynamic Pricing
+        from ml_models.ai_dynamic_pricing import train_pricing_model, _load_model as _l4
+        _l4()
+        import ml_models.ai_dynamic_pricing as _pm4
+        if _pm4._MODEL is None: print(f"[ML] Pricing: {train_pricing_model().get('message')}")
+        else: print(f"[ML] Pricing loaded.")
+    except Exception as _me:
+        print(f"[ML] Auto-train skipped or failed: {_me}")
+
     return app
 
 
@@ -455,5 +492,7 @@ if __name__ == "__main__":
     print("  Staff:       priya@blissfulabodes.com  / Staff@123")
     print("  Guest:       rajesh@example.com        / Guest@123")
     app.run(debug=True, host="0.0.0.0", port=5000)
+
+
 
 

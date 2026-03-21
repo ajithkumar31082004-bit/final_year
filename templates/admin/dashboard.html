@@ -180,6 +180,9 @@
                     <div style="padding:0.75rem;background:#fff5f5;border-radius:10px;margin-bottom:0.5rem;border-left:3px solid var(--danger);">
                         <div style="font-size:0.85rem;font-weight:600;">{{ b.booking_id }}</div>
                         <div style="font-size:0.8rem;color:var(--danger);">⚠️ Fraud score: {{ "%.0f"|format(b.fraud_score * 100) }}%</div>
+                        <div style="font-size:0.75rem;color:var(--text-light);margin-top:0.25rem;">
+                            Reasons: {{ b.fraud_flags|join(', ') if b.fraud_flags else '—' }}
+                        </div>
                     </div>
                     {% endfor %}
                 </div>
@@ -211,6 +214,7 @@
             <button class="modal-close" onclick="document.getElementById('couponModal').classList.remove('show')">&times;</button>
         </div>
         <form method="POST" action="{{ url_for('admin.create_coupon') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div class="form-group"><label class="form-label">Coupon Code</label><input type="text" name="code" class="form-control" placeholder="SUMMER25" required style="text-transform:uppercase;"></div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
                 <div class="form-group"><label class="form-label">Type</label><select name="discount_type" class="form-control"><option value="percentage">Percentage (%)</option><option value="flat">Flat (₹)</option></select></div>

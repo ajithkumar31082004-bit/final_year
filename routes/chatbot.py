@@ -781,23 +781,45 @@ def _create_booking(user_id, room, check_in, check_out, guests, payment_method):
             "is_new_user": False,
         }
     )
-    if fraud_result.get("risk_level") == "HIGH":
-        return None, "fraud_high", fraud_result
-    fraud_score = fraud_result.get("fraud_score", 0)
-    is_flagged = 1 if fraud_score >= 35 else 0
+    fraud_score = float(fraud_result.get("fraud_score", 0) or 0)
+    fraud_flags = fraud_result.get("flags") or []
+    if not isinstance(fraud_flags, list):
+        fraud_flags = [str(fraud_flags)]
+    risk_level = str(fraud_result.get("risk_level", "")).upper()
+    is_high_risk = bool(
+        fraud_result.get("should_block")
+        or risk_level in ("FRAUD", "HIGH")
+    )
+    is_medium_risk = bool(
+        not is_high_risk
+        and (
+            fraud_result.get("is_suspicious")
+            or float(fraud_score or 0) >= 0.35
+            or risk_level in ("REVIEW",)
+        )
+    )
+    is_flagged = 1 if (is_high_risk or is_medium_risk) else 0
 
     booking_id = f"BK{datetime.now().strftime('%Y%m%d')}{uuid.uuid4().hex[:6].upper()}"
     is_cash = str(payment_method).lower() in ["cash", "cash_at_desk", "cash at desk"]
     status = "confirmed" if is_cash else "pending"
     payment_status = "paid" if is_cash else "pending"
+    if is_high_risk:
+        status = "blocked"
+        payment_status = "blocked"
+        is_cash = False
+    elif is_medium_risk:
+        status = "pending_verification"
+        payment_status = "pending"
+        is_cash = False
 
     conn = get_db()
     conn.execute(
         """INSERT INTO bookings
         (booking_id, user_id, room_id, room_number, check_in, check_out, num_guests,
          base_amount, gst_amount, total_amount, status, payment_status, payment_method,
-         fraud_score, is_flagged)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        fraud_score, is_flagged, fraud_flags)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             booking_id,
             user_id,
@@ -814,25 +836,54 @@ def _create_booking(user_id, room, check_in, check_out, guests, payment_method):
             payment_method,
             fraud_score,
             is_flagged,
+            json.dumps(fraud_flags),
         ),
     )
-    conn.execute(
-        "UPDATE rooms SET status = ? WHERE room_id = ?",
-        ("occupied" if is_cash else "reserved", room["room_id"]),
-    )
-    conn.execute(
-        """INSERT INTO notifications (notification_id, user_id, title, message, notification_type, action_url)
-           VALUES (?, ?, ?, ?, 'info', ?)""",
-        (
-            str(uuid.uuid4()),
-            user_id,
-            "Booking Created",
-            f"Room {room['room_number']} reserved for {check_in} - {check_out}.",
-            f"/guest/booking/{booking_id}",
-        ),
-    )
+    if not is_high_risk:
+        conn.execute(
+            "UPDATE rooms SET status = ? WHERE room_id = ?",
+            ("occupied" if is_cash else "reserved", room["room_id"]),
+        )
+        guest_title = "Booking Created"
+        guest_message = f"Room {room['room_number']} reserved for {check_in} - {check_out}."
+        if is_medium_risk:
+            guest_title = "Booking Pending Verification"
+            guest_message = (
+                f"Your booking {booking_id} is under manual verification. We will update you shortly."
+            )
+        conn.execute(
+            """INSERT INTO notifications (notification_id, user_id, title, message, notification_type, action_url)
+               VALUES (?, ?, ?, ?, 'info', ?)""",
+            (
+                str(uuid.uuid4()),
+                user_id,
+                guest_title,
+                guest_message,
+                f"/guest/booking/{booking_id}",
+            ),
+        )
+
+    if is_flagged:
+        reason_text = ", ".join(fraud_flags) if fraud_flags else "Rule-based anomaly"
+        admins = conn.execute(
+            "SELECT user_id FROM users WHERE role IN ('admin','superadmin') AND is_active = 1"
+        ).fetchall()
+        for a in admins:
+            conn.execute(
+                """INSERT INTO notifications (notification_id, user_id, title, message, notification_type, action_url)
+                   VALUES (?, ?, ?, ?, 'warning', ?)""",
+                (
+                    str(uuid.uuid4()),
+                    a["user_id"],
+                    "Suspicious Booking",
+                    f"Booking {booking_id} flagged by fraud detection (score {fraud_score}, risk {risk_level}). Reasons: {reason_text}.",
+                    "/admin/bookings",
+                ),
+            )
     conn.commit()
     conn.close()
+    if is_high_risk:
+        return booking_id, "fraud_high", fraud_result
     return booking_id, None, fraud_result
 
 
@@ -1148,6 +1199,17 @@ def chatbot_message():
                 if error == "fraud_high":
                     return _reply("Suspicious booking detected. Please contact support.")
                 return _reply(f"Booking failed: {error}")
+
+            fraud_score = float(fraud_result.get("fraud_score", 0) or 0)
+            risk_level = str(fraud_result.get("risk_level", "")).upper()
+            if (
+                risk_level in ("REVIEW",)
+                or fraud_result.get("is_suspicious")
+                or fraud_score >= 0.35
+            ):
+                return _reply(
+                    "Your booking is under manual verification. We will update you shortly."
+                )
 
             if str(payment_method).lower() == "cash":
                 return _reply(

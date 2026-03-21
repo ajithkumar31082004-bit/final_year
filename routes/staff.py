@@ -302,10 +302,55 @@ def update_service_request_status(request_id):
     if status not in ["pending", "in_progress", "completed", "cancelled"]:
         return jsonify({"success": False, "message": "Invalid status"}), 400
     conn = get_db()
+    req = conn.execute(
+        "SELECT * FROM service_requests WHERE request_id = ?", (request_id,)
+    ).fetchone()
+    if not req:
+        conn.close()
+        return jsonify({"success": False, "message": "Request not found"}), 404
+    req = dict(req)
     conn.execute(
         "UPDATE service_requests SET status = ?, updated_at = ? WHERE request_id = ?",
         (status, datetime.now().isoformat(), request_id),
     )
+    if status == "completed":
+        room_label = req.get("room_number") or "your room"
+        is_special = req.get("request_type") == "special_request"
+        title = "Special Request Completed" if is_special else "Service Request Completed"
+        message = f"Your request for {room_label} has been completed."
+        conn.execute(
+            """INSERT INTO notifications
+            (notification_id, user_id, title, message, notification_type, action_url)
+            VALUES (?, ?, ?, ?, 'success', ?)""",
+            (
+                str(uuid.uuid4()),
+                req.get("user_id"),
+                title,
+                message,
+                "/guest/bookings",
+            ),
+        )
+
+        managers = conn.execute(
+            """SELECT user_id, role FROM users
+               WHERE role IN ('manager','admin','superadmin')
+               AND is_active = 1"""
+        ).fetchall()
+        for m in managers:
+            role = m["role"]
+            action_url = "/manager/dashboard" if role == "manager" else "/admin/bookings"
+            conn.execute(
+                """INSERT INTO notifications
+                (notification_id, user_id, title, message, notification_type, action_url)
+                VALUES (?, ?, ?, ?, 'info', ?)""",
+                (
+                    str(uuid.uuid4()),
+                    m["user_id"],
+                    title,
+                    f"{title} for {room_label}.",
+                    action_url,
+                ),
+            )
     conn.commit()
     conn.close()
     return jsonify({"success": True})
