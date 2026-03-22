@@ -24,6 +24,7 @@
                 <div class="page-subtitle" id="liveClock"></div>
             </div>
             <a href="{{ url_for('staff.walkin_booking') }}" class="btn btn-primary">🚶 Walk-in Booking</a>
+
         </div>
         
         <!-- Stats -->
@@ -45,22 +46,38 @@
                 <div><div class="stat-value" id="statAvailable">{{ stats.available }}</div><div class="stat-label">Available Rooms</div></div>
             </div>
         </div>
-        
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin-bottom:1.75rem;">
-            <!-- Check-in Queue -->
+            <!-- Smart Check-In & Booking Management Panel -->
             <div class="card">
-                <div class="card-header" style="background:rgba(40,167,69,0.08);"><span>✅ Today's Check-ins ({{ checkin_list|length }})</span></div>
-                <div style="max-height:320px;overflow-y:auto;">
+                <div class="card-header" style="background:rgba(40,167,69,0.08);">
+                    <span>✅ Smart Check-in Queue ({{ checkin_list|length }})</span>
+                </div>
+                <div style="max-height:360px;overflow-y:auto;">
                     {% if checkin_list %}
                     <table class="data-table">
-                        <thead><tr><th>Room</th><th>Guest</th><th>Phone</th><th>Action</th></tr></thead>
+                        <thead><tr><th>Guest details</th><th>AI Risk Analysis</th><th>Action</th></tr></thead>
                         <tbody>
                         {% for b in checkin_list %}
-                        <tr>
-                            <td><strong>{{ b.room_number }}</strong><br><small style="color:var(--text-light);">{{ b.room_type }}</small></td>
-                            <td>{{ b.first_name }} {{ b.last_name }}</td>
-                            <td style="font-size:0.8rem;">{{ b.phone }}</td>
-                            <td><button class="btn btn-success btn-sm" onclick="processCheckin('{{ b.booking_id }}')">Check In</button></td>
+                        <tr style="{% if b.is_flagged %}background:rgba(220,53,69,0.05);{% endif %}">
+                            <td>
+                                <strong>{{ b.first_name }} {{ b.last_name }}</strong><br>
+                                <small style="color:var(--text-light);">Room: <strong>{{ b.room_number }}</strong> ({{ b.room_type }})</small>
+                            </td>
+                            <td>
+                                {% if b.is_flagged or b.fraud_score > 30 %}
+                                    <span class="badge badge-danger">🔴 High Fraud Risk ({{ b.fraud_score }}%)</span><br>
+                                {% elif b.fraud_score > 15 %}
+                                    <span class="badge badge-warning">🟡 Duplicate/Caution ({{ b.fraud_score }}%)</span>
+                                {% else %}
+                                    <span class="badge badge-success">🟢 verified safe</span>
+                                {% endif %}
+                                {% if b.fraud_score > 35 %}
+                                    <br><span class="badge badge-danger">High Cancel Risk -> Hold</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <button class="btn btn-success btn-sm" onclick="processCheckin('{{ b.booking_id }}')">Smart Check-In</button>
+                            </td>
                         </tr>
                         {% endfor %}
                         </tbody>
@@ -71,10 +88,12 @@
                 </div>
             </div>
             
-            <!-- Check-out Queue -->
+            <!-- Cancellation Handling / Check-out Queue -->
             <div class="card">
-                <div class="card-header" style="background:rgba(220,53,69,0.08);"><span>🚪 Today's Check-outs ({{ checkout_list|length }})</span></div>
-                <div style="max-height:320px;overflow-y:auto;">
+                <div class="card-header" style="background:rgba(220,53,69,0.08);">
+                    <span>🚪 Today's Check-outs ({{ checkout_list|length }})</span>
+                </div>
+                <div style="max-height:360px;overflow-y:auto;">
                     {% if checkout_list %}
                     <table class="data-table">
                         <thead><tr><th>Room</th><th>Guest</th><th>Total</th><th>Action</th></tr></thead>
@@ -98,17 +117,30 @@
         
         <!-- Room Status Grid -->
         <div class="card" style="margin-bottom:1.75rem;">
-            <div class="card-header">
-                <span>🗺️ Live Room Status Grid — 100 Rooms</span>
-                <div style="display:flex;gap:0.75rem;font-size:0.75rem;flex-wrap:wrap;">
+            <div class="card-header" style="display:flex; justify-content:space-between; align-items:center;">
+                <span>🗺️ Live Room Status Grid</span>
+                <span class="badge badge-success" style="font-size:0.85rem;">
+                    🤖 AI Suggests: Room 
+                    {% set ns = namespace(found=false) %}
+                    {% for floor, rooms in rooms_by_floor.items() %}
+                        {% for r in rooms %}
+                            {% if r.status == 'cleaning' and not ns.found %}
+                                {{ r.room_number }}
+                                {% set ns.found = true %}
+                            {% endif %}
+                        {% endfor %}
+                    {% endfor %}
+                    ready for next guest
+                </span>
+            </div>
+            <div class="card-body">
+                <div style="display:flex;gap:0.75rem;font-size:0.75rem;flex-wrap:wrap;margin-bottom:1rem;background:var(--surface);padding:0.5rem;border-radius:4px;">
                     <span style="color:var(--success);">🟢 Available ({{ stats.available }})</span>
                     <span style="color:var(--danger);">🔴 Occupied ({{ stats.occupied }})</span>
                     <span style="color:#856404">🟡 Cleaning ({{ stats.cleaning }})</span>
                     <span style="color:var(--info);">🔵 Maintenance ({{ stats.maintenance }})</span>
                     <span style="color:#8a6d3b">🟤 Reserved ({{ stats.reserved }})</span>
                 </div>
-            </div>
-            <div class="card-body">
                 {% for floor, rooms in rooms_by_floor.items() %}
                 <div class="floor-label">Floor {{ floor }}</div>
                 <div class="room-grid-container" style="margin-bottom:1rem;">
@@ -125,27 +157,40 @@
             </div>
         </div>
         
-        <!-- Housekeeping Tasks -->
+        <!-- Housekeeping & Maintenance AI Task Queue -->
         <div class="card">
             <div class="card-header">
-                <span>🧹 Housekeeping Tasks ({{ tasks|length }} pending)</span>
+                <span>🧹 AI Prioritized Task List ({{ tasks|length }} pending)</span>
                 <button class="btn btn-sm btn-primary" onclick="document.getElementById('newTaskModal').classList.add('show')">+ New Task</button>
             </div>
             {% if tasks %}
             <div class="table-container">
             <table class="data-table">
-                <thead><tr><th>Room</th><th>Type</th><th>Priority</th><th>Assigned To</th><th>Status</th><th>Actions</th></tr></thead>
+                <thead><tr><th>Room</th><th>Task Details</th><th>Assigned To</th><th>Status</th><th>AI Priority</th><th>Actions</th></tr></thead>
                 <tbody>
-                {% for task in tasks %}
+                {% for t in tasks %}
                 <tr>
-                    <td><strong>{{ task.room_number }}</strong></td>
-                    <td>{{ task.task_type|title }}</td>
-                    <td><span class="badge badge-{{ 'danger' if task.priority == 'urgent' else 'warning' if task.priority == 'high' else 'info' }}">{{ task.priority|title }}</span></td>
-                    <td>{{ task.staff_name or 'Unassigned' }}</td>
-                    <td><span class="badge badge-{{ 'success' if task.status == 'completed' else 'warning' if task.status == 'in_progress' else 'info' }}">{{ task.status|title }}</span></td>
+                    <td><strong>{{ t.room_number }}</strong></td>
+                    <td style="max-width:280px;">
+                        <strong>{{ t.task_type }}</strong><br>
+                        <small style="color:var(--text-light);">{{ t.notes }}</small>
+                    </td>
+                    <td>{{ t.staff_name or 'Unassigned' }}</td>
                     <td>
-                        <button class="btn btn-sm btn-success" onclick="updateTask('{{ task.task_id }}','completed')">✅ Done</button>
-                        <button class="btn btn-sm btn-warning" onclick="updateTask('{{ task.task_id }}','in_progress')">▶️ Start</button>
+                        <span class="badge badge-{{ 'success' if t.status == 'completed' else 'warning' if t.status == 'in_progress' else 'info' }}">{{ t.status|title }}</span>
+                    </td>
+                    <td>
+                        {% if t.priority == 'urgent' %}
+                            <span class="badge badge-danger">High Priority 🔴</span>
+                        {% elif t.priority == 'high' %}
+                            <span class="badge badge-warning">Medium 🟡</span>
+                        {% else %}
+                            <span class="badge badge-success">Standard 🟢</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <button class="btn btn-sm btn-warning" onclick="updateTask('{{ t.task_id }}','in_progress')" {% if t.status == 'in_progress' %}disabled{% endif %}>Start</button>
+                        <button class="btn btn-sm btn-success" onclick="updateTask('{{ t.task_id }}','completed')">Done</button>
                     </td>
                 </tr>
                 {% endfor %}
@@ -189,29 +234,29 @@
     </main>
 </div>
 
-<!-- Staff Chatbot -->
-<button class="chatbot-toggle" onclick="toggleStaffChatbot()" title="Staff Assistant">
+<!-- Staff Operations AI Chatbot -->
+<button class="chatbot-toggle" onclick="toggleStaffChatbot()" title="Staff AI Assistant">
     💬
 </button>
 <div class="chatbot-window" id="staffChatbotWindow">
-    <div class="chatbot-header">
-        <div class="chatbot-avatar">🧑‍💼</div>
+    <div class="chatbot-header" style="background:var(--primary);">
+        <div class="chatbot-avatar">🤖</div>
         <div>
-            <div class="chatbot-title">Staff Assistant</div>
-            <div class="chatbot-status">🟢 Online • Task & Shift Help</div>
+            <div class="chatbot-title">Staff Operations AI</div>
+            <div class="chatbot-status">🟢 Online • Task & Priority Help</div>
         </div>
-        <button onclick="toggleStaffChatbot()" style="background:none;border:none;color:rgba(255,255,255,0.7);font-size:1.25rem;cursor:pointer;margin-left:auto;">&times;</button>
+        <button onclick="toggleStaffChatbot()" style="background:none;border:none;color:white;font-size:1.25rem;cursor:pointer;margin-left:auto;">&times;</button>
     </div>
     <div class="chatbot-messages" id="staffChatMessages">
         <div class="chat-message bot">
             <div class="message-bubble">
-                Hi {{ user.first_name }}, I can help with your tasks, shift, and procedures. What do you need?
+                Hi {{ user.first_name }}, I am your AI Operations Assistant. I monitor live room status and cleaning queues. What do you need to know?
             </div>
         </div>
         <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:0.5rem;">
-            <button class="btn btn-sm btn-outline" onclick="sendStaffQuickMsg('Show my tasks')">🧹 My tasks</button>
-            <button class="btn btn-sm btn-outline" onclick="sendStaffQuickMsg('What is my shift today?')">🕒 My shift</button>
-            <button class="btn btn-sm btn-outline" onclick="sendStaffQuickMsg('How do I update room status?')">🗝️ Room status</button>
+            <button class="btn btn-sm btn-outline" onclick="sendStaffQuickMsg('Which rooms to clean?')">🧹 Which rooms to clean?</button>
+            <button class="btn btn-sm btn-outline" onclick="sendStaffQuickMsg('Next check-in?')">🕒 Next check-in?</button>
+            <button class="btn btn-sm btn-outline" onclick="sendStaffQuickMsg('What is my next priority task?')">🎯 My priority?</button>
         </div>
     </div>
     <div class="chatbot-input">

@@ -8,16 +8,43 @@ from ml_models.external_apis import (
     AWSPersonalizeAPI
 )
 
+try:
+    import google.generativeai as genai
+    _GENAI_AVAILABLE = True
+except ImportError:
+    _GENAI_AVAILABLE = False
+
 class OpenAIDecisionAgent:
     def __init__(self):
-        # We initialize dynamically in case key is set later
         self.api_key = os.environ.get("OPENAI_API_KEY", "")
         self.client = None
         if self.api_key:
             self.client = OpenAI(api_key=self.api_key)
 
+        # Gemini fallback
+        self.gemini_key = os.environ.get("GEMINI_API_KEY", "")
+        self.gemini_model = None
+        if self.gemini_key and _GENAI_AVAILABLE:
+            try:
+                genai.configure(api_key=self.gemini_key)
+                self.gemini_model = genai.GenerativeModel("gemini-1.5-flash")
+            except Exception:
+                self.gemini_model = None
+
+    def _call_gemini(self, system_prompt: str, user_msg: str) -> str:
+        """Fallback AI call using Google Gemini."""
+        if not self.gemini_model:
+            return None
+        try:
+            full_prompt = f"{system_prompt}\n\nUser: {user_msg}"
+            response = self.gemini_model.generate_content(full_prompt)
+            return response.text
+        except Exception as e:
+            return None
+
     def is_configured(self):
-        return bool(self.client) and bool(self.api_key)
+        return (bool(self.client) and bool(self.api_key)) or bool(self.gemini_model)
+
 
     def handle_message(self, user_msg: str, user_id: str, booking_state: dict, chat_history: list = None) -> dict:
         """
@@ -108,6 +135,10 @@ class OpenAIDecisionAgent:
             return result
 
         except Exception as e:
+            # Try Gemini as fallback
+            gemini_reply = self._call_gemini(self._get_system_prompt(), user_msg)
+            if gemini_reply:
+                return {"text": gemini_reply, "state_updates": {}, "provider": "gemini"}
             return {"text": f"Error contacting AI: {str(e)}", "state_updates": {}}
 
     def _get_system_prompt(self):
@@ -140,5 +171,78 @@ Always be polite, professional, and use emojis."""
             return text[start:end]
         return None
 
+    def handle_manager_message(self, user_msg: str, manager_context: dict) -> str:
+        """
+        Specialized internal assistant for the Hotel Manager.
+        Has access to live KPIs, fraud data, and revenue.
+        """
+        if not self.is_configured():
+            return "OpenAI API Key is missing. I am running in Offline Mode. I see your daily revenue is ₹" + str(manager_context.get('today_revenue', 0))
+
+        system_prompt = f"""You are the internal Executive AI Assistant for the Hotel Manager at Blissful Abodes.
+The manager will ask you operational questions. You have access to the following live, real-time context:
+Revenue Today: ₹{manager_context.get('today_revenue', 0)}
+Monthly Revenue: ₹{manager_context.get('monthly_revenue', 0)}
+Occupancy: {manager_context.get('occupancy', 0)}%
+Pending Tasks: {manager_context.get('pending_tasks', 0)}
+Flagged Fraud Bookings: {manager_context.get('fraud_count', 0)}
+
+Answer professionally, concisely, and use emojis. Rely ONLY on the context provided above to answer data questions. 
+If they ask about something not in the context, tell them you don't have that specific data layer loaded yet.
+"""
+        try:
+            response = self.client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_msg}
+                ],
+                temperature=0.4,
+            )
+            return response.choices[0].message.content
+        except Exception as e:
+            # Try Gemini as fallback
+            gemini_reply = self._call_gemini(system_prompt, user_msg)
+            if gemini_reply:
+                return gemini_reply
+            return f"Error contacting AI Assistant: {str(e)}"
+
+    def handle_staff_message(self, user_msg: str, staff_context: dict) -> str:
+        """
+        Specialized internal assistant for the Hotel Staff.
+        Helps with task prioritization, check-ins, and room availability.
+        """
+        if not self.is_configured():
+            return f"Offline Mode: You have {staff_context.get('pending_tasks', 0)} pending tasks and {staff_context.get('checkins_today', 0)} check-ins today."
+
+        system_prompt = f"""You are the internal Assistant for the Hotel Staff at Blissful Abodes.
+The staff member will ask you operational questions regarding tasks, rooms, and check-ins.
+You have access to the following live context:
+Pending Tasks: {staff_context.get('pending_tasks', 0)}
+Urgent Tasks: {staff_context.get('urgent_tasks', 0)}
+Today's Check-ins: {staff_context.get('checkins_today', 0)}
+Rooms to Clean: {staff_context.get('cleaning_rooms', 0)}
+Your Next Task: {staff_context.get('next_task', 'None')}
+
+Answer professionally, concisely, and use emojis. Tell them their next priority if they ask what to do.
+"""
+        try:
+            response = self.client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_msg}
+                ],
+                temperature=0.4,
+            )
+            return response.choices[0].message.content
+        except Exception as e:
+            # Try Gemini as fallback
+            gemini_reply = self._call_gemini(system_prompt, user_msg)
+            if gemini_reply:
+                return gemini_reply
+            return f"Error contacting AI Assistant: {str(e)}"
+
 # Singleton instance
 openai_agent = OpenAIDecisionAgent()
+

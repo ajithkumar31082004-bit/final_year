@@ -871,10 +871,25 @@ def book_room(room_id):
         if is_cash:
             # Update user loyalty points and coupon usage immediately
             conn = get_db()
-            new_pts = user.get("loyalty_points", 0) - pts_to_use + pts_earned
+            current_points = user.get("loyalty_points", 0)
+            
+            if pts_to_use > 0:
+                current_points -= pts_to_use
+                conn.execute(
+                    "INSERT INTO loyalty_transactions (transaction_id, user_id, points, transaction_type, reference_id, description, balance_after) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    (str(uuid.uuid4()), user["user_id"], pts_to_use, "spent", booking_id, f"Points redeemed for booking {booking_id}", current_points)
+                )
+
+            if pts_earned > 0:
+                current_points += pts_earned
+                conn.execute(
+                    "INSERT INTO loyalty_transactions (transaction_id, user_id, points, transaction_type, reference_id, description, balance_after) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    (str(uuid.uuid4()), user["user_id"], pts_earned, "earned", booking_id, f"Points earned from booking {booking_id}", current_points)
+                )
+
             conn.execute(
                 "UPDATE users SET loyalty_points = ? WHERE user_id = ?",
-                (new_pts, user["user_id"]),
+                (current_points, user["user_id"]),
             )
             if coupon_code and discount_amount > 0:
                 conn.execute(
@@ -1097,12 +1112,27 @@ def verify_payment_api():
     )
 
     # Apply loyalty points and coupons
-    new_pts = user.get("loyalty_points", 0) - booking.get(
-        "loyalty_points_used", 0
-    ) + booking.get("loyalty_points_earned", 0)
+    pts_to_use = booking.get("loyalty_points_used", 0)
+    pts_earned = booking.get("loyalty_points_earned", 0)
+    current_points = user.get("loyalty_points", 0)
+    
+    if pts_to_use > 0:
+        current_points -= pts_to_use
+        conn.execute(
+            "INSERT INTO loyalty_transactions (transaction_id, user_id, points, transaction_type, reference_id, description, balance_after) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (str(uuid.uuid4()), user["user_id"], pts_to_use, "spent", booking_id, f"Points redeemed for booking {booking_id}", current_points)
+        )
+
+    if pts_earned > 0:
+        current_points += pts_earned
+        conn.execute(
+            "INSERT INTO loyalty_transactions (transaction_id, user_id, points, transaction_type, reference_id, description, balance_after) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (str(uuid.uuid4()), user["user_id"], pts_earned, "earned", booking_id, f"Points earned from booking {booking_id}", current_points)
+        )
+
     conn.execute(
         "UPDATE users SET loyalty_points = ? WHERE user_id = ?",
-        (new_pts, user["user_id"]),
+        (current_points, user["user_id"]),
     )
     if booking.get("coupon_code") and booking.get("discount_amount", 0) > 0:
         conn.execute(

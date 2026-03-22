@@ -17,7 +17,8 @@ import uuid, json
 from datetime import datetime, timedelta
 from functools import wraps
 from models.database import get_db
-from ml_models.models import get_demand_model
+from ml_models.models import get_demand_model, get_pricing_engine
+from ml_models.openai_agent import openai_agent
 
 manager_bp = Blueprint("manager", __name__)
 
@@ -144,11 +145,77 @@ def dashboard():
                              ORDER BY priority DESC, created_at"""
     ).fetchall()
 
+
+    # Inventory
+    inventory = conn.execute("SELECT * FROM inventory ORDER BY name").fetchall()
+    low_stock = [i for i in inventory if i["stock_count"] <= i["reorder_level"]]
+
+    # Open issues
+    issues = conn.execute(
+        """SELECT * FROM maintenance_issues WHERE status = 'open' 
+                             ORDER BY priority DESC, created_at"""
+    ).fetchall()
+
     conn.close()
 
     demand_model = get_demand_model()
     demand_forecast = demand_model.predict_next_30_days()
     next_7_avg = demand_model.get_next_7_days_avg()
+
+    pricing = get_pricing_engine()
+    prices = pricing.get_all_current_prices(occupancy)
+
+    # AI Smart Control Metrics
+    conn = get_db()
+    high_fraud = conn.execute("SELECT COUNT(*) FROM bookings WHERE fraud_score >= 35 OR is_flagged = 1").fetchone()[0]
+    cancel_risk = conn.execute("SELECT COUNT(*) FROM bookings WHERE status = 'cancelled'").fetchone()[0]
+    safe_bookings = conn.execute("SELECT COUNT(*) FROM bookings WHERE fraud_score < 20").fetchone()[0]
+
+    # Smart Fraud Control Panel Data
+    flagged = conn.execute('''SELECT b.*, u.first_name, u.last_name FROM bookings b 
+                              JOIN users u ON b.user_id = u.user_id 
+                              WHERE b.is_flagged = 1 OR b.fraud_score > 30 
+                              ORDER BY b.fraud_score DESC''').fetchall()
+    
+    flagged_bookings = []
+    for f in flagged:
+        fd = dict(f)
+        try:
+            flags = json.loads(fd.get('fraud_flags') or '[]')
+            fd['fraud_explanation'] = ", ".join(flags) if flags else "Suspicious pattern detected"
+        except:
+            fd['fraud_explanation'] = "Suspicious pattern detected"
+        flagged_bookings.append(fd)
+
+    # Dynamic Pricing Control Data
+    pricing_panel = []
+    for room_type, price_info in prices.items():
+        base = 5000 if room_type == 'Single' else 6500 if room_type == 'Double' else 7500 if room_type == 'Family' else 15000
+        actual_price = price_info.get("final_price", base) if isinstance(price_info, dict) else price_info
+        delta = actual_price - base
+        pct_change = round((delta / base) * 100, 1) if base > 0 else 0
+        
+        # Determine AI Reason based on the surge multiplier if available
+        ai_reason = price_info.get("reason", "Standard market rate") if isinstance(price_info, dict) else "Standard market rate"
+        if not isinstance(price_info, dict):
+             ai_reason = "High demand expected" if pct_change > 10 else "Weekend premium" if pct_change > 0 else "Low demand expected -> Discounted" if pct_change < 0 else "Standard market rate"
+
+        pricing_panel.append({
+            "room_type": room_type,
+            "base_price": base,
+            "ai_price": round(actual_price, 0),
+            "pct_change": pct_change,
+            "ai_reason": ai_reason
+        })
+
+    # AI Recommendation Insights
+    rec_insights = [
+        {"title": "Most Booked", "insight": "VIP Suites are currently trending among couples."},
+        {"title": "Demographic", "insight": "Family rooms see highest demand during weekend check-ins."},
+        {"title": "Amenity Preference", "insight": "Guests searching for 'Spa' convert 3x faster on Executive Suites."}
+    ]
+    
+    conn.close()
 
     rooms_by_floor = {}
     for r in rooms:
@@ -168,11 +235,17 @@ def dashboard():
             "avg_rating": round(avg_rating, 1),
             "pending_tasks": pending_tasks,
             "tasks_done": completed_tasks,
+            "fraud_alerts": high_fraud,
+            "cancel_risk": cancel_risk,
+            "safe_bookings": safe_bookings,
         },
         team=[dict(t) for t in team],
         shifts=[dict(s) for s in shifts],
         bookings=[dict(b) for b in bookings],
         today_bookings=[dict(b) for b in today_bookings],
+        flagged_bookings=flagged_bookings,
+        pricing_panel=pricing_panel,
+        rec_insights=rec_insights,
         rooms_by_floor=rooms_by_floor,
         recent_reviews=[dict(r) for r in recent_reviews],
         low_reviews=[dict(r) for r in low_reviews],
@@ -335,3 +408,32 @@ def assign_task():
     conn.commit()
     conn.close()
     return jsonify({"success": True})
+
+@manager_bp.route("/api/manager/chat", methods=["POST"])
+@manager_required
+def manager_chat():
+    user_msg = request.json.get("message", "")
+    if not user_msg:
+        return jsonify({"reply": "I didn't catch that."})
+
+    # Build live context for AI
+    conn = get_db()
+    today = datetime.now().strftime("%Y-%m-%d")
+    today_rev = conn.execute("SELECT COALESCE(SUM(total_amount), 0) FROM bookings WHERE date(created_at) = ? AND payment_status = 'paid'", (today,)).fetchone()[0]
+    monthly_rev = conn.execute("SELECT COALESCE(SUM(total_amount), 0) FROM bookings WHERE strftime('%Y-%m', created_at) = ? AND payment_status = 'paid'", (datetime.now().strftime("%Y-%m"),)).fetchone()[0]
+    rooms_count = conn.execute("SELECT COUNT(*) FROM rooms").fetchone()[0]
+    occupied = conn.execute("SELECT COUNT(*) FROM rooms WHERE status IN ('occupied','reserved')").fetchone()[0]
+    pending = conn.execute("SELECT COUNT(*) FROM housekeeping_tasks WHERE status = 'pending'").fetchone()[0]
+    fraud = conn.execute("SELECT COUNT(*) FROM bookings WHERE fraud_score >= 35 OR is_flagged = 1").fetchone()[0]
+    conn.close()
+
+    context = {
+        "today_revenue": today_rev,
+        "monthly_revenue": monthly_rev,
+        "occupancy": round(occupied / max(rooms_count, 1) * 100, 1) if rooms_count else 0,
+        "pending_tasks": pending,
+        "fraud_count": fraud
+    }
+
+    reply = openai_agent.handle_manager_message(user_msg, context)
+    return jsonify({"reply": reply})

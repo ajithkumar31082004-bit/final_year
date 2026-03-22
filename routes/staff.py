@@ -21,6 +21,7 @@ from functools import wraps
 from models.database import get_db
 from services.ai_chat_service import generate_ai_reply
 from services.security import hash_password
+from ml_models.openai_agent import openai_agent
 
 staff_bp = Blueprint("staff", __name__)
 
@@ -151,7 +152,7 @@ def dashboard():
         """SELECT h.*, u.first_name as staff_name FROM housekeeping_tasks h
                             LEFT JOIN users u ON h.assigned_to = u.user_id
                             WHERE h.status != 'completed'
-                            ORDER BY h.created_at DESC LIMIT 20"""
+                            ORDER BY CASE h.priority WHEN 'urgent' THEN 1 WHEN 'high' THEN 2 WHEN 'normal' THEN 3 ELSE 4 END, h.created_at DESC LIMIT 20"""
     ).fetchall()
 
     # Maintenance issues
@@ -549,28 +550,27 @@ def staff_chatbot_message():
 
     user = get_current_user()
     conn = get_db()
-    tasks = conn.execute(
-        """SELECT room_number, task_type, priority, status
-           FROM housekeeping_tasks
-           WHERE assigned_to = ? AND status != 'completed'
-           ORDER BY created_at DESC""",
-        (user.get("user_id"),),
-    ).fetchall()
-    shift = conn.execute(
-        """SELECT * FROM staff_shifts
-           WHERE staff_id = ? AND date = date('now')
-           ORDER BY shift_type LIMIT 1""",
-        (user.get("user_id"),),
+    
+    # Build AI Context
+    today = datetime.now().strftime("%Y-%m-%d")
+    pending = conn.execute("SELECT COUNT(*) FROM housekeeping_tasks WHERE assigned_to = ? AND status = 'pending'", (user.get("user_id"),)).fetchone()[0]
+    urgent = conn.execute("SELECT COUNT(*) FROM housekeeping_tasks WHERE assigned_to = ? AND priority = 'urgent' AND status = 'pending'", (user.get("user_id"),)).fetchone()[0]
+    checkins = conn.execute("SELECT COUNT(*) FROM bookings WHERE check_in = ? AND status = 'confirmed'", (today,)).fetchone()[0]
+    cleaning_rooms = conn.execute("SELECT COUNT(*) FROM rooms WHERE status = 'cleaning'").fetchone()[0]
+    
+    next_task_row = conn.execute(
+        "SELECT room_number, task_type FROM housekeeping_tasks WHERE assigned_to = ? AND status = 'pending' ORDER BY CASE priority WHEN 'urgent' THEN 1 WHEN 'high' THEN 2 WHEN 'normal' THEN 3 ELSE 4 END LIMIT 1", 
+        (user.get("user_id"),)
     ).fetchone()
     conn.close()
 
-    system_prompt = _build_staff_prompt(user, [dict(t) for t in tasks], dict(shift) if shift else None)
-    history = _get_staff_chat_history()
-    reply, err = generate_ai_reply(message, history, system_prompt)
-    if reply:
-        safe = _sanitize_reply(reply)
-        _append_staff_chat_history(message, reply)
-        return jsonify({"ok": True, "reply": safe})
-    if err == "missing_api_key":
-        return jsonify({"ok": True, "reply": "Staff chatbot is not configured. Set GEMINI_API_KEY and restart."})
-    return jsonify({"ok": True, "reply": "Sorry, I couldn't respond right now. Please try again."})
+    context = {
+        "pending_tasks": pending,
+        "urgent_tasks": urgent,
+        "checkins_today": checkins,
+        "cleaning_rooms": cleaning_rooms,
+        "next_task": f"{next_task_row['task_type']} in Room {next_task_row['room_number']}" if next_task_row else "None"
+    }
+
+    reply = openai_agent.handle_staff_message(message, context)
+    return jsonify({"ok": True, "reply": reply})

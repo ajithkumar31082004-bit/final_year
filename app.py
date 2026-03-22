@@ -1,10 +1,15 @@
-﻿"""
+"""
 Blissful Abodes Hotel Management System
 Main Flask Application Entry Point
 """
 
 import os
 from datetime import datetime, timedelta
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
 from flask import (
     Flask,
     render_template,
