@@ -486,6 +486,9 @@ def create_app(config_name="default"):
     return app
 
 
+# Create app instance for production/deployment environments
+app = create_app(os.getenv("FLASK_ENV", "production"))
+
 if __name__ == "__main__":
     app = create_app("development")
     print("BLISSFUL ABODES HOTEL MANAGEMENT SYSTEM")
