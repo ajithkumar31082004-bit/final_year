@@ -53,13 +53,14 @@
       </div>
     </div>
 
-    {% include 'guest/pipeline_visualizer.html' %}
-
     <div style="display:flex;gap:0.75rem;flex-wrap:wrap;margin-top:1.5rem;">
       <a class="btn btn-outline" href="{{ url_for('guest.my_bookings') }}">Back to My Bookings</a>
       <a class="btn btn-primary" href="{{ url_for('guest.download_invoice', booking_id=booking.booking_id) }}">Download GST Invoice</a>
       {% if booking.payment_status != 'paid' %}
       <a class="btn btn-success" href="{{ url_for('guest.payment_page', booking_id=booking.booking_id) }}">Complete Payment</a>
+      {% endif %}
+      {% if booking.status == 'completed' and not booking.has_review %}
+      <a class="btn btn-primary" href="{{ url_for('guest.write_review', booking_id=booking.booking_id) }}">Write Review</a>
       {% endif %}
       {% if booking.status not in ['cancelled','completed'] %}
       <button class="btn btn-danger" onclick="cancelBooking('{{ booking.booking_id }}')">Cancel Booking</button>

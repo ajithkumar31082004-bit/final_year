@@ -207,11 +207,11 @@ def dashboard():
 
     # AI insights
     insights = [
-        f"ðŸ† VIP Suites performing at high occupancy - consider price increase",
-        f"ðŸ“ˆ Occupancy at {occupancy_rate}% - {'above' if occupancy_rate > 70 else 'below'} target",
-        f"â­ Guest satisfaction: {round(avg_rating, 1)}/5.0 ({sentiment_summary['positive_pct']}% positive)",
-        f"ðŸ’¡ Forecast: Next week expected to show {'high' if occupancy_rate > 60 else 'moderate'} demand",
-        f"ðŸ”„ Monthly revenue: â‚¹{monthly_revenue:,.0f}",
+        "VIP Suites are at high occupancy. Consider a small price increase.",
+        f"Occupancy is {occupancy_rate}% ({'above' if occupancy_rate > 70 else 'below'} target).",
+        f"Guest satisfaction: {round(avg_rating, 1)}/5.0 ({sentiment_summary['positive_pct']}% positive).",
+        f"Next week demand is expected to be {'high' if occupancy_rate > 60 else 'moderate'}.",
+        f"Monthly revenue: INR {monthly_revenue:,.0f}.",
     ]
 
     return render_template(
@@ -655,7 +655,10 @@ def review_action(review_id):
     elif action == "respond":
         response = request.json.get("response")
         if response:
-            conn.execute("UPDATE reviews SET admin_response = ? WHERE review_id = ?", (response, review_id))
+            conn.execute(
+                "UPDATE reviews SET staff_response = ? WHERE review_id = ?",
+                (response, review_id),
+            )
     
     conn.commit()
     conn.close()
@@ -724,11 +727,14 @@ def analytics():
 
     # Room type revenue performance for bar chart
     room_perf_rows = conn.execute(
-        """SELECT COALESCE(room_type, 'Unknown') as room_type,
-                  COALESCE(SUM(total_amount), 0) as revenue,
+        """SELECT COALESCE(r.room_type, 'Unknown') as room_type,
+                  COALESCE(SUM(b.total_amount), 0) as revenue,
                   COUNT(*) as bookings
-           FROM bookings WHERE payment_status = 'paid'
-           GROUP BY room_type ORDER BY revenue DESC"""
+           FROM bookings b
+           LEFT JOIN rooms r ON b.room_id = r.room_id
+           WHERE b.payment_status = 'paid'
+           GROUP BY r.room_type
+           ORDER BY revenue DESC"""
     ).fetchall()
     room_perf = [dict(r) for r in room_perf_rows]
     conn.close()

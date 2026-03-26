@@ -7,12 +7,14 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash,
 from functools import wraps
 from datetime import datetime, timedelta
 import json
+import uuid
 
 from models.database import get_db
 from ml_models.models import (
     get_recommendation_model,
     get_pricing_engine,
     get_demand_model,
+    get_sentiment_analyzer,
     get_cancellation_predictor,
     get_fraud_detector,
     get_user_behavior_model,
@@ -24,6 +26,18 @@ from services.pdf_service import generate_gst_invoice, generate_booking_qr
 from services.payment_service import create_order, verify_payment, RAZORPAY_KEY_ID
 
 guest_bp = Blueprint("guest", __name__)
+
+ROOM_IMAGE_MAP = {
+    "Single": "images/rooms/single.jpg",
+    "Double": "images/rooms/double.jpg",
+    "Family": "images/rooms/family.jpg",
+    "Couple": "images/rooms/couple.jpg",
+    "VIP Suite": "images/rooms/vip.jpg",
+}
+
+
+def _local_room_image_path(room_type):
+    return ROOM_IMAGE_MAP.get(room_type, ROOM_IMAGE_MAP["Single"])
 
 
 def login_required(f):
@@ -117,18 +131,20 @@ def book_room(room_id):
             return redirect(url_for("guest.book_room", room_id=room_id))
 
         nights = (co - ci).days
-        total_amount = room_dict["current_price"] * nights
+        base_amount = room_dict["current_price"] * nights
+        gst_amount = base_amount * 0.18
+        total_amount = base_amount + gst_amount
 
         # Create booking
         booking_id = f"BK{datetime.now().strftime('%Y%m%d%H%M%S')}{uuid.uuid4().hex[:6].upper()}"
         conn = get_db()
         conn.execute(
             """INSERT INTO bookings
-               (booking_id, user_id, room_id, check_in, check_out, num_guests,
-                total_amount, status, payment_status, created_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (booking_id, user["user_id"], room_id, check_in, check_out,
-             num_guests, total_amount, "pending", "pending", datetime.now().isoformat())
+               (booking_id, user_id, room_id, room_number, check_in, check_out, num_guests,
+                base_amount, gst_amount, total_amount, status, payment_status, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (booking_id, user["user_id"], room_id, room_dict.get("room_number", ""), check_in, check_out,
+             num_guests, base_amount, gst_amount, total_amount, "pending", "pending", datetime.now().isoformat())
         )
         conn.commit()
         conn.close()
@@ -340,6 +356,10 @@ def booking_detail(booking_id):
            WHERE b.booking_id = ? AND b.user_id = ?""",
         (booking_id, user["user_id"])
     ).fetchone()
+    review_row = conn.execute(
+        "SELECT review_id FROM reviews WHERE booking_id = ? AND user_id = ?",
+        (booking_id, user["user_id"]),
+    ).fetchone()
     conn.close()
 
     if not booking:
@@ -355,6 +375,7 @@ def booking_detail(booking_id):
     except:
         booking_dict["amenities"] = []
 
+    booking_dict["has_review"] = bool(review_row)
     return render_template("guest/booking_detail.html", booking=booking_dict)
 
 
@@ -481,7 +502,9 @@ def my_bookings():
 
     conn = get_db()
     bookings = conn.execute(
-        """SELECT b.*, r.room_type, r.room_number
+        """SELECT b.*, r.room_type, r.room_number,
+                  (SELECT COUNT(1) FROM reviews rv
+                   WHERE rv.booking_id = b.booking_id AND rv.user_id = b.user_id) AS review_count
            FROM bookings b
            JOIN rooms r ON b.room_id = r.room_id
            WHERE b.user_id = ?
@@ -649,31 +672,67 @@ def write_review(booking_id):
         flash("Booking not found or not eligible for review.", "danger")
         return redirect(url_for("guest.my_bookings"))
 
+    existing = conn.execute(
+        "SELECT review_id FROM reviews WHERE booking_id = ? AND user_id = ?",
+        (booking_id, user["user_id"]),
+    ).fetchone()
+    if existing:
+        conn.close()
+        flash("You have already submitted a review for this booking.", "info")
+        return redirect(url_for("guest.my_bookings"))
+
     if request.method == "POST":
-        rating = safe_int(request.form.get("overall_rating", 5), 5)
+        rating = safe_int(
+            request.form.get("rating") or request.form.get("overall_rating"), 5
+        )
         comment = request.form.get("comment", "").strip()
-        cleanliness = safe_int(request.form.get("cleanliness_rating", 5), 5)
-        staff = safe_int(request.form.get("staff_rating", 5), 5)
-        location = safe_int(request.form.get("location_rating", 5), 5)
-        value = safe_int(request.form.get("value_rating", 5), 5)
-        amenities = safe_int(request.form.get("amenities_rating", 5), 5)
+        cleanliness = safe_int(
+            request.form.get("cleanliness") or request.form.get("cleanliness_rating"),
+            5,
+        )
+        staff = safe_int(
+            request.form.get("staff") or request.form.get("staff_rating"), 5
+        )
+        location = safe_int(
+            request.form.get("location") or request.form.get("location_rating"), 5
+        )
+        value = safe_int(request.form.get("value") or request.form.get("value_rating"), 5)
+        amenities = safe_int(
+            request.form.get("amenities")
+            or request.form.get("amenities_rating"),
+            5,
+        )
+
+        if not comment or len(comment) < 5:
+            flash("Please provide a short comment (at least 5 characters).", "warning")
+            return redirect(url_for("guest.write_review", booking_id=booking_id))
+
+        rating = max(1, min(5, rating))
+        cleanliness = max(1, min(5, cleanliness))
+        staff = max(1, min(5, staff))
+        location = max(1, min(5, location))
+        value = max(1, min(5, value))
+        amenities = max(1, min(5, amenities))
 
         review_id = f"RV{datetime.now().strftime('%Y%m%d%H%M%S')}{uuid.uuid4().hex[:6].upper()}"
+        sentiment = get_sentiment_analyzer()
+        analysis = sentiment.analyze(comment)
 
         conn.execute(
             """INSERT INTO reviews
                (review_id, booking_id, user_id, room_id, overall_rating, comment,
                 cleanliness_rating, staff_rating, location_rating, value_rating, amenities_rating,
-                created_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                verified_stay, sentiment, sentiment_score, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (review_id, booking_id, user["user_id"], booking["room_id"],
              rating, comment, cleanliness, staff, location, value, amenities,
+             1, analysis.get("sentiment", "neutral"), analysis.get("score", 0),
              datetime.now().isoformat())
         )
 
         # Award loyalty points for review
         current_points = user.get("loyalty_points", 0)
-        new_points = current_points + 25
+        new_points = current_points + 50
         conn.execute(
             "UPDATE users SET loyalty_points = ? WHERE user_id = ?",
             (new_points, user["user_id"])
@@ -682,7 +741,7 @@ def write_review(booking_id):
         conn.commit()
         conn.close()
 
-        flash("Review submitted successfully! You earned 25 loyalty points!", "success")
+        flash("Review submitted successfully! You earned 50 loyalty points!", "success")
         return redirect(url_for("guest.my_bookings"))
 
     conn.close()
@@ -747,17 +806,23 @@ def room_listing():
     total_rooms = conn.execute(
         "SELECT COUNT(*) FROM rooms WHERE is_active = 1"
     ).fetchone()[0]
+    ratings_rows = conn.execute(
+        """SELECT room_id, COALESCE(AVG(overall_rating), 0) as rating,
+                  COUNT(*) as review_count
+           FROM reviews
+           GROUP BY room_id"""
+    ).fetchall()
     conn.close()
 
-    all_rooms = []
-    image_map = {
-        "Single": "images/rooms/single.jpg",
-        "Double": "images/rooms/double.jpg",
-        "Family": "images/rooms/family.jpg",
-        "Couple": "images/rooms/couple.jpg",
-        "VIP Suite": "images/rooms/vip.jpg",
+    ratings_map = {
+        r["room_id"]: {
+            "rating": round(r["rating"] or 0, 1),
+            "review_count": r["review_count"] or 0,
+        }
+        for r in ratings_rows
     }
 
+    all_rooms = []
     for r in room_rows:
         rd = dict(r)
         # Normalize JSON fields for templates
@@ -779,11 +844,12 @@ def room_listing():
                 rd["images"] = []
         # Prefer local images for room cards
         room_type = rd.get("room_type")
-        local_img = image_map.get(room_type)
-        if local_img:
-            rd["primary_image"] = url_for("static", filename=local_img)
-        elif rd.get("images"):
-            rd["primary_image"] = rd["images"][0]
+        local_img = _local_room_image_path(room_type)
+        rd["primary_image"] = url_for("static", filename=local_img)
+        # Attach rating info for sorting/labels
+        rating_info = ratings_map.get(rd.get("room_id"), {})
+        rd["rating"] = rating_info.get("rating", 0)
+        rd["review_count"] = rating_info.get("review_count", 0)
         all_rooms.append(rd)
     room_types = sorted(
         {r.get("room_type") for r in all_rooms if r.get("room_type")}
@@ -847,6 +913,52 @@ def room_listing():
         room_types=room_types,
         type_counts=type_counts,
         occupancy_pct=occupancy_pct,
+    )
+
+
+@guest_bp.route("/rooms/<room_id>")
+def room_detail(room_id):
+    conn = get_db()
+    room = conn.execute(
+        "SELECT * FROM rooms WHERE room_id = ? AND is_active = 1",
+        (room_id,),
+    ).fetchone()
+    if not room:
+        conn.close()
+        flash("Room not found or unavailable.", "danger")
+        return redirect(url_for("guest.room_listing"))
+
+    reviews = conn.execute(
+        """SELECT rv.*, u.first_name, u.last_name
+           FROM reviews rv
+           JOIN users u ON rv.user_id = u.user_id
+           WHERE rv.room_id = ?
+           ORDER BY rv.created_at DESC
+           LIMIT 20""",
+        (room_id,),
+    ).fetchall()
+    conn.close()
+
+    room_dict = dict(room)
+    amenities_val = room_dict.get("amenities", "[]")
+    if isinstance(amenities_val, list):
+        room_dict["amenities"] = amenities_val
+    else:
+        try:
+            room_dict["amenities"] = json.loads(amenities_val or "[]")
+        except Exception:
+            room_dict["amenities"] = []
+
+    local_img = url_for(
+        "static", filename=_local_room_image_path(room_dict.get("room_type"))
+    )
+    room_dict["primary_image"] = local_img
+    room_dict["images"] = [local_img] * 4
+
+    return render_template(
+        "public/room_detail.html",
+        room=room_dict,
+        reviews=[dict(r) for r in reviews],
     )
 
 

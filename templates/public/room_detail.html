@@ -12,19 +12,25 @@
       <div class="card">
         <div class="card-body">
           {% if room.room_type == 'VIP Suite' %}
+          {% set local_file = 'images/rooms/vip.jpg' %}
           {% set fallback_file = 'images/rooms/vip.svg' %}
           {% elif room.room_type == 'Couple' %}
+          {% set local_file = 'images/rooms/couple.jpg' %}
           {% set fallback_file = 'images/rooms/couple.svg' %}
           {% elif room.room_type == 'Family' %}
+          {% set local_file = 'images/rooms/family.jpg' %}
           {% set fallback_file = 'images/rooms/family.svg' %}
           {% elif room.room_type == 'Double' %}
+          {% set local_file = 'images/rooms/double.jpg' %}
           {% set fallback_file = 'images/rooms/double.svg' %}
           {% else %}
+          {% set local_file = 'images/rooms/single.jpg' %}
           {% set fallback_file = 'images/rooms/single.svg' %}
           {% endif %}
+          {% set local_img = url_for('static', filename=local_file) %}
           {% set fallback_img = url_for('static', filename=fallback_file) %}
           <div style="border-radius:16px;overflow:hidden;box-shadow:var(--shadow-md);">
-            <img src="{{ room.primary_image if room.primary_image else (room.images[0] if room.images and room.images|length > 0 else fallback_img) }}" alt="{{ room.room_type }}" style="width:100%;height:360px;object-fit:cover;" onerror="this.onerror=null;this.src='{{ fallback_img }}';">
+            <img src="{{ room.primary_image if room.primary_image else local_img }}" alt="{{ room.room_type }}" style="width:100%;height:360px;object-fit:cover;" onerror="this.onerror=null;this.src='{{ fallback_img }}';">
           </div>
           <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.5rem;margin-top:0.75rem;">
             {% if room.images and room.images|length > 0 %}
@@ -32,7 +38,7 @@
             <img src="{{ img }}" alt="" style="width:100%;height:90px;object-fit:cover;border-radius:10px;" onerror="this.onerror=null;this.src='{{ fallback_img }}';">
             {% endfor %}
             {% else %}
-            <img src="{{ fallback_img }}" alt="" style="width:100%;height:90px;object-fit:cover;border-radius:10px;">
+            <img src="{{ local_img }}" alt="" style="width:100%;height:90px;object-fit:cover;border-radius:10px;">
             {% endif %}
           </div>
         </div>

@@ -29,7 +29,7 @@
                 {% for b in bookings %}
                 <tr>
                     <td style="font-family:monospace;font-size:0.8rem;">{{ b.booking_id }}</td>
-                    <td>{{ b.room_type }} #{{ b.rnum }}</td>
+                    <td>{{ b.room_type }} #{{ b.room_number }}</td>
                     <td>{{ b.check_in }}</td>
                     <td>{{ b.check_out }}</td>
                     <td>INR {{ "{:,.0f}".format(b.total_amount) }}</td>
@@ -49,7 +49,7 @@
                         {% if b.status in ['confirmed', 'pending'] %}
                         <button class="btn btn-sm btn-danger" onclick="cancelBooking('{{ b.booking_id }}')">Cancel</button>
                         {% endif %}
-                        {% if b.status == 'completed' %}
+                        {% if b.status == 'completed' and (b.review_count or 0) == 0 %}
                         <a href="{{ url_for('guest.write_review', booking_id=b.booking_id) }}" class="btn btn-sm btn-primary">Review</a>
                         {% endif %}
                     </td>
