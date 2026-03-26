@@ -619,6 +619,18 @@ def dashboard():
         (user["user_id"],)
     ).fetchall()
     
+    # Get AI Recommendations
+    recommender = get_recommendation_model()
+    raw_recs = recommender.get_recommendations(user["user_id"], n=3)
+    recommended_rooms = []
+    for rec in raw_recs:
+        r_db = conn.execute("SELECT room_id, current_price FROM rooms WHERE room_type = ? AND is_active = 1 LIMIT 1", (rec["room_type"],)).fetchone()
+        if r_db:
+            rec_dict = dict(rec)
+            rec_dict["room_id"] = r_db["room_id"]
+            rec_dict["current_price"] = r_db["current_price"]
+            recommended_rooms.append(rec_dict)
+            
     conn.close()
 
     current_tier = user.get("tier_level", "Silver")
@@ -645,7 +657,8 @@ def dashboard():
         tier_progress=tier_progress,
         next_threshold=next_threshold,
         next_tier=next_tier,
-        notifications=[dict(n) for n in notifications]
+        notifications=[dict(n) for n in notifications],
+        recommended_rooms=recommended_rooms
     )
 
 
