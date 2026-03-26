@@ -1123,6 +1123,7 @@ textarea.form-control {
   display: grid;
   grid-template-columns: 260px 1fr;
   min-height: calc(100vh - 70px);
+  overflow-x: hidden;
 }
 .sidebar {
   background: var(--gradient-dark);
@@ -1211,6 +1212,8 @@ textarea.form-control {
   padding: 2rem;
   background: var(--bg-cream);
   min-height: calc(100vh - 70px);
+  min-width: 0;
+  overflow-x: hidden;
 }
 
 .page-header {

@@ -7,7 +7,7 @@ import os
 from datetime import datetime, timedelta
 try:
     from dotenv import load_dotenv
-    load_dotenv()
+    load_dotenv(override=True)
 except ImportError:
     pass
 from flask import (
@@ -217,7 +217,7 @@ def create_app(config_name="default"):
             "admin": "/admin/dashboard",
             "manager": "/manager/dashboard",
             "staff": "/staff/dashboard",
-            "guest": "/guest/dashboard",
+            "guest": "/dashboard",
         }
         return redirect(redirects.get(role, "/"))
 
@@ -496,7 +496,7 @@ if __name__ == "__main__":
     print("  Manager:     suresh@blissfulabodes.com / Staff@123")
     print("  Staff:       priya@blissfulabodes.com  / Staff@123")
     print("  Guest:       rajesh@example.com        / Guest@123")
-    app.run(debug=True, host="0.0.0.0", port=5000)
+    app.run(debug=True, host="0.0.0.0", port=5000, use_reloader=False)
 
 
 

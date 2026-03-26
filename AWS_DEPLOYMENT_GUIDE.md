@@ -7,10 +7,10 @@ Internet → Route 53 → Load Balancer → EC2 (Flask App)
                                           ↓           ↓           ↓
                                         RDS         S3          SNS
                                       (SQLite→    (Images)   (Emails/SMS)
-                                      PostgreSQL)
                                           ↓
-                                       Cognito  ←→  OpenAI API
-                                    (Auth/Login)   (AI Chatbot)
+                                           ↓
+                                        Cognito
+                                    (Auth/Login)
 ```
 
 ---
@@ -204,33 +204,6 @@ s3_url = upload_invoice(local_pdf_path, booking_id)
 
 ---
 
-## Service 4: OpenAI API (AI Chatbot) ✅ Already Configured
-
-**What it does:** Powers the Aria Guest Concierge, Manager AI Assistant, and Staff Operations AI.
-
-**Status:** ✅ Already integrated in `ml_models/openai_agent.py` with Gemini fallback.
-
-**For AWS deployment, just ensure your `.env` on EC2 has the key:**
-```env
-OPENAI_API_KEY=sk-proj-...
-GEMINI_API_KEY=AIzaSy...
-```
-
-**Optional — AWS Secrets Manager (more secure):**
-```python
-import boto3, json
-
-def get_secret(secret_name):
-    client = boto3.client('secretsmanager', region_name='ap-south-1')
-    response = client.get_secret_value(SecretId=secret_name)
-    return json.loads(response['SecretString'])
-
-secrets = get_secret("blissful-abodes-secrets")
-OPENAI_API_KEY = secrets['OPENAI_API_KEY']
-```
-
----
-
 ## Service 5: SNS (Notifications — Email & SMS)
 
 **What it does:** Replaces `email_service.py` with AWS SNS for reliable email and SMS alerts to guests and admins.
@@ -373,9 +346,8 @@ COGNITO_REGION=ap-south-1
 | S3 Storage | 5 GB | ~$0.12/month |
 | SNS | 1M notifications | ~$0.50/month |
 | Cognito | First 50,000 users | **Free** |
-| OpenAI API | Usage-based | ~$5–20/month |
-| **Total** | | **~$23–52/month** |
-
+| Gemini API | Free Tier limit | **Free** |
+| **Total** | | **~$17–32/month** |
 > 💡 Use **Free Tier** for 12 months with `t2.micro` (EC2) and `db.t3.micro` (RDS) to minimize cost.
 
 ---

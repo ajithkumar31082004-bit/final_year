@@ -992,8 +992,8 @@ _runtime = AgentRuntime()
 def get_agent_status() -> Dict[str, Any]:
     from ml_models.openai_agent import openai_agent
     if openai_agent.is_configured():
-        return {"available": True, "message": "Unified AI Decision Layer Active (OpenAI)"}
-    return {"available": False, "message": "Set OPENAI_API_KEY in environment to enable the AI Agent."}
+        return {"available": True, "message": "Gemini AI Agent Active ✨"}
+    return {"available": False, "message": "Set GEMINI_API_KEY in environment to enable the AI Agent."}
 
 
 def handle_agent_message(
@@ -1082,6 +1082,10 @@ def handle_agent_message(
         if err == "not_allowed":
             return {"type": "text", "text": "This booking cannot be cancelled."}, booking_state
         return {"type": "text", "text": f"Booking {booking_id} has been cancelled."}, booking_state
+
+    # For general / unknown intent — return Gemini's direct reply if we have one
+    if emotion_prefix.strip():
+        return {"type": "text", "text": emotion_prefix.strip()}, booking_state
 
     result = _runtime.search_hotels(agent_user_id, session_id, prompt)
     return result, booking_state

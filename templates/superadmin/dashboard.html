@@ -21,7 +21,7 @@
         </ul>
     </aside>
     
-    <main class="main-content">
+    <main class="main-content" style="overflow-x:hidden;">
         <div class="page-header">
             <div>
                 <h1 class="page-title">👑 Command Center</h1>
@@ -34,14 +34,14 @@
         </div>
         
         <!-- MEGA Stats -->
-        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1.25rem;margin-bottom:1.75rem;">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:1.25rem;margin-bottom:1.75rem;">
             <div class="stat-card" style="border-left-color:var(--gold);background:linear-gradient(135deg,#1A1A2E,#16213E);color:white;">
                 <div class="stat-icon" style="background:rgba(212,175,55,0.2);">💎</div>
-                <div><div class="stat-value" style="color:var(--gold-light);">₹{{ "{:,.0f}".format(mega_stats.lifetime_revenue) }}</div><div class="stat-label" style="color:rgba(255,255,255,0.6);">Lifetime Revenue</div></div>
+                <div><div class="stat-value" style="color:var(--gold-light);font-size:1.35rem;">₹{{ "{:,.0f}".format(mega_stats.lifetime_revenue) }}</div><div class="stat-label" style="color:rgba(255,255,255,0.6);">Lifetime Revenue</div></div>
             </div>
             <div class="stat-card orange">
                 <div class="stat-icon orange">📅</div>
-                <div><div class="stat-value">₹{{ "{:,.0f}".format(mega_stats.ytd_revenue) }}</div><div class="stat-label">Year-to-Date Revenue</div></div>
+                <div><div class="stat-value" style="font-size:1.35rem;">₹{{ "{:,.0f}".format(mega_stats.ytd_revenue) }}</div><div class="stat-label">Year-to-Date Revenue</div></div>
             </div>
             <div class="stat-card success">
                 <div class="stat-icon success">🏨</div>
@@ -53,7 +53,7 @@
             </div>
         </div>
         
-        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1.25rem;margin-bottom:1.75rem;">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:1.25rem;margin-bottom:1.75rem;">
             <div class="stat-card danger">
                 <div class="stat-icon danger">👥</div>
                 <div><div class="stat-value">{{ mega_stats.active_staff }}</div><div class="stat-label">Active Staff</div></div>
@@ -68,7 +68,7 @@
             </div>
             <div class="stat-card info">
                 <div class="stat-icon info">💰</div>
-                <div><div class="stat-value">₹{{ "{:,.0f}".format(mega_stats.today_revenue) }}</div><div class="stat-label">Today's Revenue</div></div>
+                <div><div class="stat-value" style="font-size:1.35rem;">₹{{ "{:,.0f}".format(mega_stats.today_revenue) }}</div><div class="stat-label">Today's Revenue</div></div>
             </div>
         </div>
         

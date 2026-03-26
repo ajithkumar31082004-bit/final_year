@@ -313,7 +313,7 @@ def impersonate_user(user_id):
         )
 
         role_redirects = {
-            "guest": "/guest/dashboard",
+            "guest": "/dashboard",
             "staff": "/staff/dashboard",
             "manager": "/manager/dashboard",
             "admin": "/admin/dashboard",

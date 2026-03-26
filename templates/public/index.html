@@ -114,7 +114,7 @@
                         <div class="scarcity-badge">🔥 High demand</div>
                         <div class="social-proof">👀 {{ [5,8,12,3,7,15]|random }} people viewing</div>
                     </div>
-                    <a href="{{ url_for('guest.room_detail', room_id=room.room_id) }}" class="btn btn-primary btn-sm">Book Now</a>
+                    <a href="{{ url_for('guest.book_room', room_id=room.room_id) }}" class="btn btn-primary btn-sm">Book Now</a>
                 </div>
             </div>
             {% else %}

@@ -188,17 +188,35 @@ def dashboard():
         flagged_bookings.append(fd)
 
     # Dynamic Pricing Control Data
+    BASE_PRICES = {
+        'Single': 3500,
+        'Double': 5500,
+        'Family': 7000,
+        'Couple': 8500,
+        'Couple Suite': 8500,
+        'VIP Suite': 12000,
+        'Executive Suite': 10000,
+    }
     pricing_panel = []
     for room_type, price_info in prices.items():
-        base = 5000 if room_type == 'Single' else 6500 if room_type == 'Double' else 7500 if room_type == 'Family' else 15000
+        base = BASE_PRICES.get(room_type, BASE_PRICES.get(room_type.split()[0], 5000))
         actual_price = price_info.get("final_price", base) if isinstance(price_info, dict) else price_info
         delta = actual_price - base
         pct_change = round((delta / base) * 100, 1) if base > 0 else 0
-        
-        # Determine AI Reason based on the surge multiplier if available
-        ai_reason = price_info.get("reason", "Standard market rate") if isinstance(price_info, dict) else "Standard market rate"
-        if not isinstance(price_info, dict):
-             ai_reason = "High demand expected" if pct_change > 10 else "Weekend premium" if pct_change > 0 else "Low demand expected -> Discounted" if pct_change < 0 else "Standard market rate"
+
+        # Determine AI Reason
+        if isinstance(price_info, dict) and price_info.get("reason"):
+            ai_reason = price_info["reason"]
+        elif pct_change > 20:
+            ai_reason = "🔥 Very high demand — surge pricing active"
+        elif pct_change > 0:
+            ai_reason = "📈 Weekend/event premium applied"
+        elif pct_change < -20:
+            ai_reason = "📉 Low occupancy — discount to attract bookings"
+        elif pct_change < 0:
+            ai_reason = "💡 Slight discount — moderate demand"
+        else:
+            ai_reason = "✅ Standard market rate"
 
         pricing_panel.append({
             "room_type": room_type,

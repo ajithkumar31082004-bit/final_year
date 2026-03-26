@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}Booking Confirmed — Guest | Blissful Abodes{% endblock %}
+{% block content %}
+<style>
+.confirm-wrap { min-height:80vh; display:flex; align-items:center; justify-content:center; background:#f0f4f8; padding:2rem; }
+.confirm-card { background:white; border-radius:20px; box-shadow:0 12px 40px rgba(13,27,42,.12); padding:3rem; max-width:520px; width:100%; text-align:center; }
+.check-circle { width:80px; height:80px; background:linear-gradient(135deg,#10b981,#059669); border-radius:50%; display:flex; align-items:center; justify-content:center; margin:0 auto 1.5rem; font-size:2rem; }
+.booking-id { font-family:monospace; font-size:1.1rem; background:#f8fafc; border:1px dashed #cbd5e1; padding:0.75rem 1.5rem; border-radius:10px; margin:1rem 0; letter-spacing:0.08em; font-weight:700; color:#1e3c72; }
+.detail-row { display:flex; justify-content:space-between; padding:0.6rem 0; border-bottom:1px solid #f1f5f9; font-size:0.9rem; }
+.detail-row:last-child { border-bottom:none; }
+.detail-label { color:#64748b; }
+.detail-value { font-weight:600; color:#0d1b2a; }
+.fraud-chip { font-size:0.75rem; padding:0.3rem 0.75rem; border-radius:999px; font-weight:700; margin-top:0.75rem; display:inline-block; }
+.fraud-low { background:#dcfce7; color:#16a34a; }
+.fraud-medium { background:#fef3c7; color:#d97706; }
+.fraud-high { background:#fee2e2; color:#dc2626; }
+.btn-primary {
+  display:block; width:100%; padding:1rem; border-radius:12px; border:none; cursor:pointer;
+  font-size:1rem; font-weight:700; background:linear-gradient(135deg,#0d1b2a,#1b3a6b);
+  color:#edbc5a; text-decoration:none; margin-top:1rem; text-align:center;
+}
+.btn-secondary {
+  display:block; width:100%; padding:0.875rem; border-radius:12px; border:2px solid #0d1b2a;
+  font-size:0.9rem; font-weight:600; background:white; color:#0d1b2a;
+  text-decoration:none; margin-top:0.75rem; text-align:center;
+}
+</style>
+
+<div class="confirm-wrap">
+  <div class="confirm-card">
+    <div class="check-circle">✅</div>
+    <h1 style="font-size:1.5rem; font-weight:800; color:#0d1b2a; margin-bottom:0.5rem;">Booking Confirmed!</h1>
+    <p style="color:#64748b; font-size:0.9rem; margin-bottom:1.5rem;">Thank you, <strong>{{ confirm.guest_name }}</strong>! Your guest booking is pending payment confirmation.</p>
+
+    <div class="booking-id">{{ confirm.booking_id }}</div>
+
+    <div style="text-align:left; background:#f8fafc; border-radius:12px; padding:1.25rem; margin:1rem 0;">
+      <div class="detail-row"><span class="detail-label">Room Type</span><span class="detail-value">{{ confirm.room_type }}</span></div>
+      <div class="detail-row"><span class="detail-label">Check-In</span><span class="detail-value">{{ confirm.check_in }}</span></div>
+      <div class="detail-row"><span class="detail-label">Check-Out</span><span class="detail-value">{{ confirm.check_out }}</span></div>
+      <div class="detail-row"><span class="detail-label">Duration</span><span class="detail-value">{{ confirm.nights }} night{{ 's' if confirm.nights > 1 else '' }}</span></div>
+      <div class="detail-row"><span class="detail-label">Total (incl. GST)</span><span class="detail-value" style="color:#10b981; font-size:1.05rem;">₹{{ "{:,.0f}".format(confirm.total_amount) }}</span></div>
+    </div>
+
+    <div>
+      <span class="fraud-chip fraud-{{ confirm.fraud_level | lower }}">
+        🤖 AI Fraud Check: {{ confirm.fraud_level }} Risk
+      </span>
+    </div>
+
+    <div style="background:#fef3c7; border-radius:12px; padding:1.25rem; margin-top:1.25rem; text-align:left;">
+      <div style="font-weight:700; font-size:0.9rem; color:#92400e; margin-bottom:0.5rem;">⚠️ Guest Booking Limitations</div>
+      <div style="font-size:0.8rem; color:#78350f; line-height:1.6;">
+        • No loyalty points earned for this booking<br>
+        • Booking history won't be saved to your account<br>
+        • Create an account to unlock full AI recommendations
+      </div>
+    </div>
+
+    <div style="background:#dcfce7; border-radius:12px; padding:1rem; margin-top:1rem; font-size:0.8rem; color:#065f46; text-align:left;">
+      📧 Confirmation sent to <strong>{{ confirm.guest_email }}</strong>
+    </div>
+
+    <a class="btn-primary" href="{{ url_for('auth.register') }}">🎁 Create Account & Earn 100 Points</a>
+    <a class="btn-secondary" href="{{ url_for('guest.room_listing') }}">← Browse More Rooms</a>
+  </div>
+</div>
+{% endblock %}

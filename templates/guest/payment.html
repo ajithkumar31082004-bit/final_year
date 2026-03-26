@@ -35,6 +35,8 @@
 {% endif %}
 <script>
 const bookingId = '{{ booking.booking_id }}';
+const bookingDetailUrlTemplate = "{{ url_for('guest.booking_detail', booking_id='__BOOKING_ID__') }}";
+const bookingDetailUrl = bookingDetailUrlTemplate.replace('__BOOKING_ID__', bookingId);
 const orderId = '{{ order_id }}';
 const amountPaise = {{ amount_paise }};
 const keyId = '{{ razorpay_key_id }}';
@@ -47,7 +49,7 @@ function verifyPayment(payload){
   }).then(r => r.json()).then(d => {
     if (d.success) {
       showToast('Payment successful');
-      setTimeout(() => window.location = `/guest/booking/${bookingId}`, 700);
+      setTimeout(() => window.location = bookingDetailUrl, 700);
     } else {
       showToast(d.message || 'Payment failed');
     }

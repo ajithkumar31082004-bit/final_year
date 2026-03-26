@@ -675,12 +675,21 @@ def _load_external_module(module_name, filename):
         return None
 
 
-_ext_recommender = _load_external_module("ai_recommender", "ai_recommender.py")
-_ext_dynamic_pricing = _load_external_module("ai_dynamic_pricing", "ai_dynamic_pricing.py")
-_ext_sentiment = _load_external_module("ai_sentiment", "ai_sentiment.py")
-_ext_fraud = _load_external_module("ai_fraud_detection", "ai_fraud_detection.py")
-_ext_cancellation = _load_external_module("ai_cancellation", "ai_cancellation.py")
-_ext_demand = _load_external_module("ai_demand_forecast", "ai_demand_forecast.py")
+_ext_modules = {}
+
+
+def _get_external_module(module_name, filename):
+    if str(os.environ.get("BA_DISABLE_EXTERNAL_MODELS", "")).strip().lower() in {
+        "1",
+        "true",
+        "yes",
+    }:
+        return None
+    key = f"{module_name}:{filename}"
+    if key in _ext_modules:
+        return _ext_modules[key]
+    _ext_modules[key] = _load_external_module(module_name, filename)
+    return _ext_modules[key]
 
 
 class ExternalRecommendationAdapter:
@@ -1106,8 +1115,11 @@ _user_behavior_model = None
 def get_recommendation_model():
     global _recommendation_model
     if not _recommendation_model:
-        if _ext_recommender:
-            _recommendation_model = ExternalRecommendationAdapter(_ext_recommender)
+        ext_recommender = _get_external_module(
+            "ai_recommender", "ai_recommender.py"
+        )
+        if ext_recommender:
+            _recommendation_model = ExternalRecommendationAdapter(ext_recommender)
         else:
             _recommendation_model = RoomRecommendationSystem()
     return _recommendation_model
@@ -1116,8 +1128,11 @@ def get_recommendation_model():
 def get_demand_model():
     global _demand_model
     if not _demand_model:
-        if _ext_demand:
-            _demand_model = ExternalDemandAdapter(_ext_demand)
+        ext_demand = _get_external_module(
+            "ai_demand_forecast", "ai_demand_forecast.py"
+        )
+        if ext_demand:
+            _demand_model = ExternalDemandAdapter(ext_demand)
         else:
             _demand_model = DemandForecastingModel()
     return _demand_model
@@ -1126,8 +1141,11 @@ def get_demand_model():
 def get_pricing_engine():
     global _pricing_engine
     if not _pricing_engine:
-        if _ext_dynamic_pricing:
-            _pricing_engine = ExternalDynamicPricingAdapter(_ext_dynamic_pricing)
+        ext_dynamic_pricing = _get_external_module(
+            "ai_dynamic_pricing", "ai_dynamic_pricing.py"
+        )
+        if ext_dynamic_pricing:
+            _pricing_engine = ExternalDynamicPricingAdapter(ext_dynamic_pricing)
         else:
             _pricing_engine = DynamicPricingEngine()
     return _pricing_engine
@@ -1136,8 +1154,9 @@ def get_pricing_engine():
 def get_sentiment_analyzer():
     global _sentiment_analyzer
     if not _sentiment_analyzer:
-        if _ext_sentiment:
-            _sentiment_analyzer = ExternalSentimentAdapter(_ext_sentiment)
+        ext_sentiment = _get_external_module("ai_sentiment", "ai_sentiment.py")
+        if ext_sentiment:
+            _sentiment_analyzer = ExternalSentimentAdapter(ext_sentiment)
         else:
             _sentiment_analyzer = SentimentAnalyzer()
     return _sentiment_analyzer
@@ -1146,8 +1165,11 @@ def get_sentiment_analyzer():
 def get_fraud_detector():
     global _fraud_detector
     if not _fraud_detector:
-        if _ext_fraud:
-            _fraud_detector = ExternalFraudAdapter(_ext_fraud)
+        ext_fraud = _get_external_module(
+            "ai_fraud_detection", "ai_fraud_detection.py"
+        )
+        if ext_fraud:
+            _fraud_detector = ExternalFraudAdapter(ext_fraud)
         else:
             _fraud_detector = FraudDetector()
     return _fraud_detector
@@ -1156,8 +1178,11 @@ def get_fraud_detector():
 def get_cancellation_predictor():
     global _cancellation_predictor
     if not _cancellation_predictor:
-        if _ext_cancellation:
-            _cancellation_predictor = ExternalCancellationAdapter(_ext_cancellation)
+        ext_cancellation = _get_external_module(
+            "ai_cancellation", "ai_cancellation.py"
+        )
+        if ext_cancellation:
+            _cancellation_predictor = ExternalCancellationAdapter(ext_cancellation)
         else:
             _cancellation_predictor = CancellationPredictor()
     return _cancellation_predictor

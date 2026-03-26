@@ -158,7 +158,7 @@ def login():
                 "admin": "/admin/dashboard",
                 "manager": "/manager/dashboard",
                 "staff": "/staff/dashboard",
-                "guest": "/guest/dashboard",
+                "guest": "/dashboard",
             }
             return redirect(redirects.get(role, "/"))
         else:

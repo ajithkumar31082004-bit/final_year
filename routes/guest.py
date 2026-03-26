@@ -3,25 +3,11 @@ Blissful Abodes - Guest Routes
 Guest dashboard, room browsing, booking, reviews, loyalty
 """
 
-from flask import (
-    Blueprint,
-    render_template,
-    request,
-    redirect,
-    url_for,
-    flash,
-    session,
-    jsonify,
-    send_file,
-    current_app,
-)
-import uuid
-import json
-from datetime import datetime, timedelta
-import uuid
-import json
-from datetime import datetime, timedelta
+from flask import Blueprint, render_template, request, redirect, url_for, flash, session, jsonify, send_file, current_app
 from functools import wraps
+from datetime import datetime, timedelta
+import json
+
 from models.database import get_db
 from ml_models.models import (
     get_recommendation_model,
@@ -31,11 +17,8 @@ from ml_models.models import (
     get_fraud_detector,
     get_user_behavior_model,
 )
-from services.email_service import (
-    send_booking_confirmation,
-    send_cancellation_email,
-    send_review_request,
-)
+
+from services.email_service import send_booking_confirmation, send_cancellation_email, send_review_request
 from services.refund_policy import calculate_refund_pct
 from services.pdf_service import generate_gst_invoice, generate_booking_qr
 from services.payment_service import create_order, verify_payment, RAZORPAY_KEY_ID
@@ -50,7 +33,6 @@ def login_required(f):
             flash("Please login to continue.", "warning")
             return redirect(url_for("auth.login"))
         return f(*args, **kwargs)
-
     return decorated
 
 
@@ -98,901 +80,297 @@ def get_current_user():
     return dict(user) if user else None
 
 
-def get_unread_notifications(user_id):
-    conn = get_db()
-    count = conn.execute(
-        "SELECT COUNT(*) FROM notifications WHERE user_id = ? AND read_status = 0",
-        (user_id,),
-    ).fetchone()[0]
-    conn.close()
-    return count
-
-
-@guest_bp.route("/guest/dashboard")
-@login_required
-def dashboard():
-    user = get_current_user()
-    if not user:
-        return redirect(url_for("auth.login"))
-
-    conn = get_db()
-
-    # Stats
-    today = datetime.now().strftime("%Y-%m-%d")
-
-    upcoming = conn.execute(
-        """SELECT b.*, r.room_type, r.amenities FROM bookings b 
-                              JOIN rooms r ON b.room_id = r.room_id
-                              WHERE b.user_id = ? AND b.check_in >= ? AND b.status = 'confirmed'
-                              ORDER BY b.check_in ASC LIMIT 5""",
-        (user["user_id"], today),
-    ).fetchall()
-
-    past_bks = conn.execute(
-        """SELECT COUNT(*) FROM bookings WHERE user_id = ? AND status = 'completed' """,
-        (user["user_id"],),
-    ).fetchone()[0]
-
-    total_spent = conn.execute(
-        """SELECT COALESCE(SUM(total_amount), 0) FROM bookings 
-                                 WHERE user_id = ? AND status IN ('completed', 'confirmed') AND payment_status = 'paid' """,
-        (user["user_id"],),
-    ).fetchone()[0]
-
-    notifications = conn.execute(
-        """SELECT * FROM notifications WHERE user_id = ? 
-                                   ORDER BY created_at DESC LIMIT 10""",
-        (user["user_id"],),
-    ).fetchall()
-
-    unread_count = get_unread_notifications(user["user_id"])
-
-    wishlist = conn.execute(
-        """SELECT r.* FROM wishlists w JOIN rooms r ON w.room_id = r.room_id 
-                               WHERE w.user_id = ?""",
-        (user["user_id"],),
-    ).fetchall()
-
-    reviews = conn.execute(
-        """SELECT v.*, r.room_number, r.room_type FROM reviews v 
-                              JOIN rooms r ON v.room_id = r.room_id WHERE v.user_id = ? 
-                              ORDER BY v.created_at DESC""",
-        (user["user_id"],),
-    ).fetchall()
-
-    conn.close()
-
-    # AI recommendations
-    rec_model = get_recommendation_model()
-    recommendations = rec_model.get_recommendations(user["user_id"], n=4)
-
-    # Get recommended rooms from DB
-    rec_rooms = []
-    conn = get_db()
-    for rec in recommendations[:4]:
-        rm = conn.execute(
-            'SELECT * FROM rooms WHERE room_type = ? AND status = "available" LIMIT 1',
-            (rec["room_type"],),
-        ).fetchone()
-        if rm:
-            rm_dict = dict(rm)
-            rm_dict["match_score"] = rec["match_score"]
-            rm_dict["reason"] = rec["reason"]
-            rm_dict["amenities"] = json.loads(rm_dict.get("amenities", "[]"))
-            rec_rooms.append(rm_dict)
-    conn.close()
-
-    # Tier info
-    tiers = {"Silver": 5000, "Gold": 15000, "Platinum": None}
-    current_tier = user.get("tier_level", "Silver")
-    next_tier = {"Silver": "Gold", "Gold": "Platinum", "Platinum": None}.get(
-        current_tier
-    )
-    next_threshold = tiers.get(next_tier, 0) if next_tier else 0
-    tier_progress = (
-        min(100, int(user.get("loyalty_points", 0) / max(next_threshold, 1) * 100))
-        if next_threshold
-        else 100
-    )
-
-    upcoming_list = [dict(b) for b in upcoming]
-    for b in upcoming_list:
-        try:
-            ci = datetime.strptime(b["check_in"], "%Y-%m-%d")
-            b["days_until"] = (ci - datetime.now()).days
-            b["amenities"] = json.loads(b.get("amenities", "[]"))
-        except Exception:
-            b["days_until"] = 0
-
-    return render_template(
-        "guest/dashboard.html",
-        user=user,
-        upcoming_bookings=upcoming_list,
-        past_bookings_count=past_bks,
-        total_spent=total_spent,
-        notifications=[dict(n) for n in notifications],
-        unread_count=unread_count,
-        wishlist=[dict(w) for w in wishlist],
-        reviews=[dict(r) for r in reviews],
-        recommended_rooms=rec_rooms,
-        current_tier=current_tier,
-        next_tier=next_tier,
-        tier_progress=tier_progress,
-        next_threshold=next_threshold,
-    )
-
-
-@guest_bp.route("/rooms")
-def room_listing():
-    room_type = request.args.get("type", "")
-    check_in = request.args.get("check_in", "")
-    check_out = request.args.get("check_out", "")
-    guests = safe_int(request.args.get("guests", 1), 1)
-    max_price = request.args.get("max_price", "")
-    sort_by = request.args.get("sort", "price_asc")
-
-    # Auto-fill dates if missing/invalid so rooms page can show dynamic pricing
-    today = datetime.now().date()
-    def _parse_date(val):
-        try:
-            return datetime.strptime(val, "%Y-%m-%d").date()
-        except Exception:
-            return None
-
-    ci_date = _parse_date(check_in)
-    co_date = _parse_date(check_out)
-    if not ci_date:
-        ci_date = today + timedelta(days=1)
-        check_in = ci_date.strftime("%Y-%m-%d")
-    if not co_date or co_date <= ci_date:
-        co_date = ci_date + timedelta(days=1)
-        check_out = co_date.strftime("%Y-%m-%d")
-
-    conn = get_db()
-    query = 'SELECT * FROM rooms WHERE is_active = 1 AND status = "available"'
-    params = []
-
-    if room_type:
-        query += " AND room_type = ?"
-        params.append(room_type)
-    if guests:
-        query += " AND max_guests >= ?"
-        params.append(guests)
-    use_dynamic_pricing = bool(check_in and check_out)
-    if max_price and not use_dynamic_pricing:
-        query += " AND current_price <= ?"
-        params.append(float(max_price))
-
-    if not use_dynamic_pricing:
-        if sort_by == "price_asc":
-            query += " ORDER BY current_price ASC"
-        elif sort_by == "price_desc":
-            query += " ORDER BY current_price DESC"
-        elif sort_by == "rating":
-            query += " ORDER BY current_price DESC"
-
-    rooms = conn.execute(query, params).fetchall()
-
-    # Get occupancy for scarcity indicators
-    occupied_count = conn.execute(
-        "SELECT COUNT(*) FROM rooms WHERE status IN ('occupied','reserved')"
-    ).fetchone()[0]
-    total_count = conn.execute("SELECT COUNT(*) FROM rooms").fetchone()[0]
-    occupancy_pct = round(occupied_count / max(total_count, 1) * 100, 1)
-
-    # Room counts by type for availability indicators
-    type_counts = {}
-    for rt in ["Single", "Double", "Family", "Couple", "VIP Suite"]:
-        avail = conn.execute(
-            "SELECT COUNT(*) FROM rooms WHERE room_type=? AND status='available'", (rt,)
-        ).fetchone()[0]
-        type_counts[rt] = avail
-
-    conn.close()
-
-    pricing_engine = get_pricing_engine()
-    days_until = None
-    if check_in:
-        try:
-            ci = datetime.strptime(check_in, "%Y-%m-%d")
-            days_until = (ci.date() - datetime.now().date()).days
-        except Exception:
-            days_until = None
-    rooms_list = []
-    photo_map = {
-        "Single": "https://cdn.pixabay.com/photo/2020/12/24/19/08/hotel-room-5858067_1280.jpg",
-        "Double": "https://cdn.pixabay.com/photo/2020/12/24/19/10/hotel-room-5858068_1280.jpg",
-        "Family": "https://cdn.pixabay.com/photo/2020/12/24/19/11/hotel-room-5858069_1280.jpg",
-        "Couple": "https://cdn.pixabay.com/photo/2021/02/07/20/08/luxury-5992539_1280.jpg",
-        "VIP Suite": "https://cdn.pixabay.com/photo/2019/12/26/16/51/luxury-suite-4720815_1280.jpg",
-    }
-    svg_map = {
-        "Single": "single.svg",
-        "Double": "double.svg",
-        "Family": "family.svg",
-        "Couple": "couple.svg",
-        "VIP Suite": "vip.svg",
-    }
-    for r in rooms:
-        rd = dict(r)
-        rd["amenities"] = json.loads(rd.get("amenities", "[]"))
-        rd["images"] = json.loads(rd.get("images", "[]"))
-        placeholder = None
-        if rd["images"] and isinstance(rd["images"], list):
-            placeholder = rd["images"][0]
-        svg_fallback = f'/static/images/rooms/{svg_map.get(rd["room_type"], "single.svg")}'
-        photo_primary = photo_map.get(rd["room_type"], svg_fallback)
-        if placeholder and isinstance(placeholder, str):
-            if placeholder.startswith("/static/images/rooms/"):
-                rd["primary_image"] = photo_primary
-                rd["images"] = [photo_primary, svg_fallback]
-            else:
-                rd["primary_image"] = placeholder
-        else:
-            rd["primary_image"] = photo_primary
-
-        # Dynamic pricing
-        if check_in:
-            try:
-                pricing = pricing_engine.calculate_price(
-                    rd["room_type"],
-                    check_in,
-                    occupancy_pct,
-                    days_until,
-                    base_price=rd.get("current_price"),
-                )
-                rd["dynamic_price"] = pricing["final_price"]
-                rd["price_rules"] = pricing["rules_applied"]
-            except Exception:
-                rd["dynamic_price"] = rd["current_price"]
-                rd["price_rules"] = []
-        else:
-            rd["dynamic_price"] = rd["current_price"]
-            rd["price_rules"] = []
-
-        rd["available_count"] = type_counts.get(rd["room_type"], 0)
-        rooms_list.append(rd)
-
-    if use_dynamic_pricing:
-        if max_price:
-            try:
-                max_price_val = float(max_price)
-                rooms_list = [
-                    r for r in rooms_list if (r.get("dynamic_price") or 0) <= max_price_val
-                ]
-            except Exception:
-                pass
-        if sort_by == "price_asc":
-            rooms_list.sort(key=lambda r: r.get("dynamic_price") or r.get("current_price") or 0)
-        elif sort_by == "price_desc":
-            rooms_list.sort(key=lambda r: r.get("dynamic_price") or r.get("current_price") or 0, reverse=True)
-        elif sort_by == "rating":
-            rooms_list.sort(key=lambda r: r.get("dynamic_price") or r.get("current_price") or 0, reverse=True)
-
-    return render_template(
-        "public/rooms.html",
-        rooms=rooms_list,
-        occupancy_pct=occupancy_pct,
-        type_counts=type_counts,
-        filters={
-            "type": room_type,
-            "check_in": check_in,
-            "check_out": check_out,
-            "guests": guests,
-            "max_price": max_price,
-            "sort": sort_by,
-        },
-        room_types=["Single", "Double", "Family", "Couple", "VIP Suite"],
-    )
-
-
-@guest_bp.route("/room/<room_id>")
-def room_detail(room_id):
-    conn = get_db()
-    room = conn.execute("SELECT * FROM rooms WHERE room_id = ?", (room_id,)).fetchone()
-    if not room:
-        flash("Room not found.", "danger")
-        return redirect(url_for("guest.room_listing"))
-
-    reviews = conn.execute(
-        """SELECT rv.*, u.first_name, u.last_name FROM reviews rv 
-                              JOIN users u ON rv.user_id = u.user_id 
-                              WHERE rv.room_id = ? ORDER BY rv.created_at DESC LIMIT 10""",
-        (room_id,),
-    ).fetchall()
-
-    avg_rating = conn.execute(
-        "SELECT AVG(overall_rating) FROM reviews WHERE room_id = ?", (room_id,)
-    ).fetchone()[0]
-    review_count = conn.execute(
-        "SELECT COUNT(*) FROM reviews WHERE room_id = ?", (room_id,)
-    ).fetchone()[0]
-    conn.close()
-
-    room_dict = dict(room)
-    room_dict["amenities"] = json.loads(room_dict.get("amenities", "[]"))
-    room_dict["images"] = json.loads(room_dict.get("images", "[]"))
-    photo_map = {
-        "Single": "https://cdn.pixabay.com/photo/2020/12/24/19/08/hotel-room-5858067_1280.jpg",
-        "Double": "https://cdn.pixabay.com/photo/2020/12/24/19/10/hotel-room-5858068_1280.jpg",
-        "Family": "https://cdn.pixabay.com/photo/2020/12/24/19/11/hotel-room-5858069_1280.jpg",
-        "Couple": "https://cdn.pixabay.com/photo/2021/02/07/20/08/luxury-5992539_1280.jpg",
-        "VIP Suite": "https://cdn.pixabay.com/photo/2019/12/26/16/51/luxury-suite-4720815_1280.jpg",
-    }
-    svg_map = {
-        "Single": "single.svg",
-        "Double": "double.svg",
-        "Family": "family.svg",
-        "Couple": "couple.svg",
-        "VIP Suite": "vip.svg",
-    }
-    svg_fallback = f'/static/images/rooms/{svg_map.get(room_dict["room_type"], "single.svg")}'
-    photo_primary = photo_map.get(room_dict["room_type"], svg_fallback)
-    if room_dict.get("images") and isinstance(room_dict["images"], list):
-        first_img = room_dict["images"][0]
-        if isinstance(first_img, str) and first_img.startswith("/static/images/rooms/"):
-            room_dict["images"] = [photo_primary, svg_fallback]
-            room_dict["primary_image"] = photo_primary
-        else:
-            room_dict["primary_image"] = first_img
-    else:
-        room_dict["images"] = [photo_primary, svg_fallback]
-        room_dict["primary_image"] = photo_primary
-    room_dict["avg_rating"] = round(avg_rating, 1) if avg_rating else 0
-    room_dict["review_count"] = review_count
-
-    return render_template(
-        "public/room_detail.html", room=room_dict, reviews=[dict(r) for r in reviews]
-    )
-
-
 @guest_bp.route("/book/<room_id>", methods=["GET", "POST"])
 @login_required
 def book_room(room_id):
-    if session.get("user_role") != "guest":
-        flash("Only guest accounts can book rooms.", "warning")
-        return redirect(url_for("guest.room_listing"))
+    """Standard booking route (non-AI)"""
+    user = get_current_user()
+    if not user:
+        flash("Please login to continue.", "warning")
+        return redirect(url_for("auth.login"))
 
     conn = get_db()
-    room = conn.execute("SELECT * FROM rooms WHERE room_id = ?", (room_id,)).fetchone()
-    if not room:
-        flash("Room not found.", "danger")
-        return redirect(url_for("guest.room_listing"))
+    room = conn.execute(
+        "SELECT * FROM rooms WHERE room_id = ? AND is_active = 1", (room_id,)
+    ).fetchone()
     conn.close()
 
+    if not room:
+        flash("Room not found or unavailable.", "danger")
+        return redirect(url_for("guest.room_listing"))
+
     room_dict = dict(room)
-    room_dict["amenities"] = json.loads(room_dict.get("amenities", "[]"))
 
     if request.method == "POST":
-        if room_dict.get("status") != "available":
-            flash("This room is not available right now.", "danger")
-            return render_template(
-                "guest/book_room.html",
-                room=room_dict,
-                special_requests=request.form.get("special_requests", ""),
-            )
-        check_in = request.form.get("check_in")
-        check_out = request.form.get("check_out")
+        check_in = request.form.get("check_in", "")
+        check_out = request.form.get("check_out", "")
         num_guests = safe_int(request.form.get("num_guests", 1), 1)
-        special_requests = request.form.get("special_requests", "")
-        coupon_code = request.form.get("coupon_code", "").upper()
-        loyalty_points = safe_int(request.form.get("loyalty_points", 0), 0)
-        payment_method = request.form.get("payment_method", "UPI")
 
-        # Validation
-        if not check_in or not check_out:
-            flash("Please select check-in and check-out dates.", "danger")
-            return render_template(
-                "guest/book_room.html",
-                room=room_dict,
-                special_requests=special_requests,
-            )
-
-        ci = datetime.strptime(check_in, "%Y-%m-%d")
-        co = datetime.strptime(check_out, "%Y-%m-%d")
-
-        if ci < datetime.now():
-            flash("Check-in date cannot be in the past.", "danger")
-            return render_template(
-                "guest/book_room.html",
-                room=room_dict,
-                special_requests=special_requests,
-            )
-
-        if co <= ci:
-            flash("Check-out must be after check-in.", "danger")
-            return render_template(
-                "guest/book_room.html",
-                room=room_dict,
-                special_requests=special_requests,
-            )
+        try:
+            ci = datetime.strptime(check_in, "%Y-%m-%d").date()
+            co = datetime.strptime(check_out, "%Y-%m-%d").date()
+            if co <= ci:
+                flash("Check-out must be after check-in", "danger")
+                return redirect(url_for("guest.book_room", room_id=room_id))
+        except ValueError:
+            flash("Invalid date format", "danger")
+            return redirect(url_for("guest.book_room", room_id=room_id))
 
         nights = (co - ci).days
-        days_until = (ci.date() - datetime.now().date()).days
-
-        # Calculate price with dynamic pricing
-        pricing_engine = get_pricing_engine()
-        conn = get_db()
-        occ = conn.execute(
-            "SELECT COUNT(*) FROM rooms WHERE status IN ('occupied','reserved')"
-        ).fetchone()[0]
-        total_rooms = conn.execute("SELECT COUNT(*) FROM rooms").fetchone()[0]
-        occ_pct = round(occ / max(total_rooms, 1) * 100, 1)
-        conn.close()
-
-        pricing = pricing_engine.calculate_price(
-            room_dict["room_type"],
-            check_in,
-            occ_pct,
-            days_until,
-            base_price=room_dict.get("current_price"),
-        )
-        base_per_night = pricing["final_price"]
-        base_amount = base_per_night * nights
-
-        user = get_current_user()
-
-        # Coupon
-        discount_amount = 0
-        if coupon_code:
-            eligibility = offers_eligibility(user["user_id"])
-            if not eligibility["eligible"]:
-                coupon_code = ""
-                discount_amount = 0
-                if eligibility["first_booking_required"] and not eligibility[
-                    "has_first_booking"
-                ]:
-                    flash("Offers unlock after your first paid booking.", "warning")
-                elif eligibility["loyalty_points"] < eligibility["min_points"]:
-                    remaining = eligibility["min_points"] - eligibility["loyalty_points"]
-                    flash(
-                        f"Earn {remaining} more loyalty points to unlock offers.",
-                        "warning",
-                    )
-            else:
-                conn = get_db()
-                coupon = conn.execute(
-                    "SELECT * FROM coupons WHERE code = ? AND is_active = 1",
-                    (coupon_code,),
-                ).fetchone()
-                conn.close()
-                if coupon:
-                    coupon = dict(coupon)
-                    if coupon["used_count"] < coupon["max_uses"]:
-                        if coupon["discount_type"] == "percentage":
-                            discount_amount = (
-                                base_amount * coupon["discount_value"] / 100
-                            )
-                        else:
-                            discount_amount = coupon["discount_value"]
-                        discount_amount = min(
-                            discount_amount, base_amount * 0.5
-                        )  # Max 50% discount
-
-        # Loyalty points redemption
-        loyalty_discount = 0
-        pts_to_use = min(loyalty_points, user.get("loyalty_points", 0))
-        loyalty_discount = pts_to_use / 10  # 1000 pts = â‚¹100
-
-        taxable = max(0, base_amount - discount_amount - loyalty_discount)
-        gst = taxable * 0.18
-        total_amount = taxable + gst
-
-        # Fraud detection
-        fraud_detector = get_fraud_detector()
-        fraud_result = fraud_detector.predict(
-            {
-                "total_amount": total_amount,
-                "payment_method": payment_method,
-                "email": user["email"],
-                "is_new_user": user.get("loyalty_points", 0) == 0,
-                "num_guests": num_guests,
-                "user_id": user["user_id"],
-                "room_id": room_id,
-                "room_type": room_dict.get("room_type"),
-                "room_capacity": room_dict.get("max_guests"),
-                "check_in": check_in,
-                "check_out": check_out,
-                "created_at": datetime.now().isoformat(),
-            }
-        )
-        fraud_score = float(fraud_result.get("fraud_score", 0) or 0)
-        risk_level = str(fraud_result.get("risk_level", "")).upper()
-        fraud_flags = fraud_result.get("flags") or []
-        if not isinstance(fraud_flags, list):
-            fraud_flags = [str(fraud_flags)]
-        is_high_risk = bool(
-            fraud_result.get("should_block")
-            or risk_level in ("FRAUD", "HIGH")
-        )
-        is_medium_risk = bool(
-            not is_high_risk
-            and (
-                fraud_result.get("is_suspicious")
-                or fraud_score >= 0.35
-                or risk_level in ("REVIEW",)
-            )
-        )
-        is_flagged = 1 if (is_high_risk or is_medium_risk) else 0
-
-        if is_high_risk:
-            booking_id = (
-                f"BK{datetime.now().strftime('%Y%m%d')}{uuid.uuid4().hex[:6].upper()}"
-            )
-            conn = get_db()
-            conn.execute(
-                """INSERT INTO bookings 
-                (booking_id, user_id, room_id, room_number, check_in, check_out, num_guests,
-                 base_amount, gst_amount, discount_amount, total_amount, coupon_code,
-                 loyalty_points_used, loyalty_points_earned, status, payment_status, payment_method,
-                 special_requests, fraud_score, is_flagged, fraud_flags, cancellation_probability)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (
-                    booking_id,
-                    user["user_id"],
-                    room_id,
-                    room_dict["room_number"],
-                    check_in,
-                    check_out,
-                    num_guests,
-                    base_amount,
-                    gst,
-                    discount_amount + loyalty_discount,
-                    total_amount,
-                    coupon_code or None,
-                    pts_to_use,
-                    0,
-                    "blocked",
-                    "blocked",
-                    payment_method,
-                    special_requests or "",
-                    fraud_score,
-                    1,
-                    json.dumps(fraud_flags),
-                    0,
-                ),
-            )
-
-            reason_text = ", ".join(fraud_flags) if fraud_flags else "High-risk anomaly"
-            admins = conn.execute(
-                "SELECT user_id FROM users WHERE role IN ('admin','superadmin') AND is_active = 1"
-            ).fetchall()
-            for a in admins:
-                conn.execute(
-                    """INSERT INTO notifications (notification_id, user_id, title, message, notification_type, action_url)
-                               VALUES (?, ?, ?, ?, 'danger', ?)""",
-                    (
-                        str(uuid.uuid4()),
-                        a["user_id"],
-                        "High-Risk Booking Blocked",
-                        f"Booking {booking_id} blocked by fraud detection (score {fraud_score}). Reasons: {reason_text}.",
-                        "/admin/bookings",
-                    ),
-                )
-            conn.commit()
-            conn.close()
-
-            flash(
-                "Your booking was blocked for security reasons. Please contact support.",
-                "danger",
-            )
-            return render_template(
-                "guest/book_room.html",
-                room=room_dict,
-                special_requests=special_requests,
-            )
-
-        # Cancellation prediction
-        cancel_pred = get_cancellation_predictor()
-        cancel_result = cancel_pred.predict(
-            {
-                "days_until_checkin": days_until,
-                "room_type": room_dict["room_type"],
-                "total_amount": total_amount,
-                "payment_method": payment_method,
-                "user_id": user["user_id"],
-                "room_id": room_id,
-                "check_in": check_in,
-                "check_out": check_out,
-                "created_at": datetime.now().isoformat(),
-            }
-        )
+        total_amount = room_dict["current_price"] * nights
 
         # Create booking
-        booking_id = (
-            f"BK{datetime.now().strftime('%Y%m%d')}{uuid.uuid4().hex[:6].upper()}"
-        )
-        pts_earned = int(base_amount / 10)
-        is_cash = str(payment_method).lower() in ["cash", "cash_at_desk", "cash at desk"]
-        status = "confirmed" if is_cash else "pending"
-        payment_status = "paid" if is_cash else "pending"
-        if is_medium_risk:
-            status = "pending_verification"
-            payment_status = "pending"
-            is_cash = False
-
+        booking_id = f"BK{datetime.now().strftime('%Y%m%d%H%M%S')}{uuid.uuid4().hex[:6].upper()}"
         conn = get_db()
         conn.execute(
-            """INSERT INTO bookings 
-            (booking_id, user_id, room_id, room_number, check_in, check_out, num_guests,
-             base_amount, gst_amount, discount_amount, total_amount, coupon_code,
-             loyalty_points_used, loyalty_points_earned, status, payment_status, payment_method,
-             special_requests, fraud_score, is_flagged, fraud_flags, cancellation_probability)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (
-                booking_id,
-                user["user_id"],
-                room_id,
-                room_dict["room_number"],
-                check_in,
-                check_out,
-                num_guests,
-                base_amount,
-                gst,
-                discount_amount + loyalty_discount,
-                total_amount,
-                coupon_code or None,
-                pts_to_use,
-                pts_earned,
-                status,
-                payment_status,
-                payment_method,
-                special_requests or "",
-                fraud_score,
-                is_flagged,
-                json.dumps(fraud_flags),
-                cancel_result["cancellation_probability"],
-            ),
+            """INSERT INTO bookings
+               (booking_id, user_id, room_id, check_in, check_out, num_guests,
+                total_amount, status, payment_status, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (booking_id, user["user_id"], room_id, check_in, check_out,
+             num_guests, total_amount, "pending", "pending", datetime.now().isoformat())
         )
-
-        # Update room status
-        conn.execute(
-            "UPDATE rooms SET status = ? WHERE room_id = ?",
-            ("occupied" if is_cash else "reserved", room_id),
-        )
-
-        # Special requests -> service request + notifications
-        special_requests_clean = (special_requests or "").strip()
-        if special_requests_clean:
-            req_id = str(uuid.uuid4())
-            conn.execute(
-                """INSERT INTO service_requests
-                (request_id, user_id, room_id, room_number, request_type, details)
-                VALUES (?, ?, ?, ?, ?, ?)""",
-                (
-                    req_id,
-                    user["user_id"],
-                    room_id,
-                    room_dict["room_number"],
-                    "special_request",
-                    special_requests_clean,
-                ),
-            )
-
-            staff_users = conn.execute(
-                """SELECT user_id, role FROM users
-                   WHERE role IN ('staff','manager','admin','superadmin')
-                   AND is_active = 1"""
-            ).fetchall()
-            for s in staff_users:
-                role = s["role"]
-                if role in ("admin", "superadmin"):
-                    action_url = "/admin/bookings"
-                elif role == "manager":
-                    action_url = "/manager/dashboard"
-                else:
-                    action_url = "/staff/dashboard"
-                conn.execute(
-                    """INSERT INTO notifications
-                    (notification_id, user_id, title, message, notification_type, action_url)
-                    VALUES (?, ?, ?, ?, 'warning', ?)""",
-                    (
-                        str(uuid.uuid4()),
-                        s["user_id"],
-                        "New Special Request",
-                        f"Booking {booking_id} (Room {room_dict['room_number']}): {special_requests_clean}",
-                        action_url,
-                    ),
-                )
-                conn.execute(
-                    """INSERT INTO messages (message_id, sender_id, recipient_id, content)
-                    VALUES (?, ?, ?, ?)""",
-                    (
-                        str(uuid.uuid4()),
-                        user["user_id"],
-                        s["user_id"],
-                        f"Special request for booking {booking_id} (Room {room_dict['room_number']}): {special_requests_clean}",
-                    ),
-                )
-
-            conn.execute(
-                """INSERT INTO notifications
-                (notification_id, user_id, title, message, notification_type, action_url)
-                VALUES (?, ?, ?, ?, 'info', ?)""",
-                (
-                    str(uuid.uuid4()),
-                    user["user_id"],
-                    "Special Request Received",
-                    "We received your special request and shared it with our team.",
-                    f"/guest/booking/{booking_id}",
-                ),
-            )
-
-        # Add notification for guest
-        if is_medium_risk:
-            guest_title = "Booking Pending Verification"
-            guest_message = (
-                f"Your booking {booking_id} is under manual verification. We will update you shortly."
-            )
-        else:
-            guest_title = "Booking Created"
-            guest_message = f'Room {room_dict["room_number"]} reserved for {check_in} - {check_out}.'
-        conn.execute(
-            """INSERT INTO notifications (notification_id, user_id, title, message, notification_type, action_url)
-                       VALUES (?, ?, ?, ?, 'info', ?)""",
-            (
-                str(uuid.uuid4()),
-                user["user_id"],
-                guest_title,
-                guest_message,
-                f"/guest/booking/{booking_id}",
-            ),
-        )
-
-        # Flag suspicious bookings for admin
-        if is_flagged:
-            reason_text = ", ".join(fraud_flags) if fraud_flags else "Rule-based anomaly"
-            admins = conn.execute(
-                "SELECT user_id FROM users WHERE role IN ('admin','superadmin') AND is_active = 1"
-            ).fetchall()
-            for a in admins:
-                conn.execute(
-                    """INSERT INTO notifications (notification_id, user_id, title, message, notification_type, action_url)
-                               VALUES (?, ?, ?, ?, 'warning', ?)""",
-                    (
-                        str(uuid.uuid4()),
-                        a["user_id"],
-                        "Suspicious Booking",
-                        f"Booking {booking_id} flagged by fraud detection (score {fraud_score}, risk {risk_level}). Reasons: {reason_text}.",
-                        "/admin/bookings",
-                    ),
-                )
-
         conn.commit()
         conn.close()
 
-        if is_medium_risk:
-            flash(
-                "Your booking is under manual verification. We will notify you once it is approved.",
-                "warning",
-            )
-            return redirect(url_for("guest.booking_detail", booking_id=booking_id))
+        flash("Booking created successfully!", "success")
+        return redirect(url_for("guest.booking_detail", booking_id=booking_id))
 
-        if is_cash:
-            # Update user loyalty points and coupon usage immediately
-            conn = get_db()
-            current_points = user.get("loyalty_points", 0)
-            
-            if pts_to_use > 0:
-                current_points -= pts_to_use
-                conn.execute(
-                    "INSERT INTO loyalty_transactions (transaction_id, user_id, points, transaction_type, reference_id, description, balance_after) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                    (str(uuid.uuid4()), user["user_id"], pts_to_use, "spent", booking_id, f"Points redeemed for booking {booking_id}", current_points)
-                )
-
-            if pts_earned > 0:
-                current_points += pts_earned
-                conn.execute(
-                    "INSERT INTO loyalty_transactions (transaction_id, user_id, points, transaction_type, reference_id, description, balance_after) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                    (str(uuid.uuid4()), user["user_id"], pts_earned, "earned", booking_id, f"Points earned from booking {booking_id}", current_points)
-                )
-
-            conn.execute(
-                "UPDATE users SET loyalty_points = ? WHERE user_id = ?",
-                (current_points, user["user_id"]),
-            )
-            if coupon_code and discount_amount > 0:
-                conn.execute(
-                    "UPDATE coupons SET used_count = used_count + 1 WHERE code = ?",
-                    (coupon_code,),
-                )
-            conn.commit()
-            conn.close()
-
-            # Generate QR code
-            try:
-                qr_path = generate_booking_qr(booking_id)
-                conn = get_db()
-                conn.execute(
-                    "UPDATE bookings SET qr_code_path = ? WHERE booking_id = ?",
-                    (qr_path, booking_id),
-                )
-                conn.commit()
-                conn.close()
-            except Exception:
-                current_app.logger.exception("Failed to generate booking QR")
-
-            # Send confirmation email
-            try:
-                invoice_path = generate_gst_invoice(
-                    {
-                        "booking_id": booking_id,
-                        "room_number": room_dict["room_number"],
-                        "room_type": room_dict["room_type"],
-                        "check_in": check_in,
-                        "check_out": check_out,
-                        "num_guests": num_guests,
-                        "base_amount": base_amount,
-                        "gst_amount": gst,
-                        "discount_amount": discount_amount + loyalty_discount,
-                        "total_amount": total_amount,
-                    },
-                    user,
-                )
-                send_booking_confirmation(
-                    user["email"],
-                    user["first_name"],
-                    {
-                        "booking_id": booking_id,
-                        "room_number": room_dict["room_number"],
-                        "room_type": room_dict["room_type"],
-                        "check_in": check_in,
-                        "check_out": check_out,
-                        "num_guests": num_guests,
-                        "total_amount": total_amount,
-                    },
-                    invoice_path,
-                )
-            except Exception:
-                current_app.logger.exception("Failed to send booking confirmation")
-
-            flash(
-                f"Room booked successfully! Booking ID: {booking_id} | You earned {pts_earned} loyalty points!",
-                "success",
-            )
-            return redirect(url_for("guest.booking_detail", booking_id=booking_id))
-
-        flash(
-            "Booking created. Please complete payment to confirm your reservation.",
-            "info",
-        )
-        return redirect(url_for("guest.payment_page", booking_id=booking_id))
-
-    user = get_current_user()
-    user_insights = None
-    if user:
-        behavior_model = get_user_behavior_model()
-        user_insights = behavior_model.predict_behavior(user["user_id"], room_dict)
-
-    return render_template("guest/book_room.html", room=room_dict, user_insights=user_insights)
+    return render_template("guest/book_room.html", room=room_dict)
 
 
-@guest_bp.route("/guest/bookings")
+
+@guest_bp.route("/book-with-ai/<room_id>", methods=["GET", "POST"])
 @login_required
-def my_bookings():
+def book_room_with_ai_decision(room_id):
+    """AI-powered booking with Central Decision Engine"""
     user = get_current_user()
+    if not user:
+        flash("Please login to continue.", "warning")
+        return redirect(url_for("auth.login"))
+
     conn = get_db()
-    bookings = conn.execute(
-        """SELECT b.*, r.room_type, r.room_number as rnum FROM bookings b
-                               JOIN rooms r ON b.room_id = r.room_id
-                               WHERE b.user_id = ? ORDER BY b.created_at DESC""",
-        (user["user_id"],),
-    ).fetchall()
+    room = conn.execute(
+        "SELECT * FROM rooms WHERE room_id = ? AND is_active = 1", (room_id,)
+    ).fetchone()
+
+    if not room:
+        conn.close()
+        flash("Room not found or unavailable.", "danger")
+        return redirect(url_for("guest.room_listing"))
+
+    room_dict = dict(room)
     conn.close()
-    return render_template(
-        "guest/bookings.html", bookings=[dict(b) for b in bookings], user=user
-    )
+
+    if request.method == "POST":
+        check_in = request.form.get("check_in", "")
+        check_out = request.form.get("check_out", "")
+        num_guests = safe_int(request.form.get("num_guests", 1), 1)
+        payment_method = request.form.get("payment_method", "card")
+
+        try:
+            ci = datetime.strptime(check_in, "%Y-%m-%d").date()
+            co = datetime.strptime(check_out, "%Y-%m-%d").date()
+            if co <= ci:
+                flash("Check-out must be after check-in", "danger")
+                return redirect(url_for("guest.book_room_with_ai_decision", room_id=room_id))
+        except ValueError:
+            flash("Invalid date format", "danger")
+            return redirect(url_for("guest.book_room_with_ai_decision", room_id=room_id))
+
+        nights = (co - ci).days
+        total_amount = room_dict["current_price"] * nights
+        days_until_checkin = max(0, (ci - datetime.now().date()).days)
+
+        # Build booking + context dicts for the AI engine
+        booking_data = {
+            "user_id": user["user_id"],
+            "room_type": room_dict.get("room_type", "Single"),
+            "check_in": check_in,
+            "check_out": check_out,
+            "guests": num_guests,
+            "total_amount": total_amount,
+            "email": user.get("email", ""),
+            "phone": user.get("phone", ""),
+            "payment_method": payment_method,
+            "created_at": datetime.now().isoformat(),
+        }
+
+        try:
+            # Load context from DB
+            db = get_db()
+            all_bookings = [dict(b) for b in db.execute("SELECT * FROM bookings").fetchall()]
+            all_rooms    = [dict(r) for r in db.execute("SELECT * FROM rooms").fetchall()]
+            all_users    = [dict(u) for u in db.execute("SELECT * FROM users").fetchall()]
+            occ_total    = db.execute("SELECT COUNT(*) FROM rooms WHERE is_active=1").fetchone()[0] or 1
+            occ_occupied = db.execute("SELECT COUNT(*) FROM rooms WHERE status IN ('occupied','reserved')").fetchone()[0]
+            db.close()
+            occupancy_rate = round(occ_occupied / max(occ_total, 1), 2)
+
+            from ml_models.ai_decision_engine import evaluate_booking as _ai_eval, get_decision_summary
+            ai_result = _ai_eval(
+                booking=booking_data,
+                room=room_dict,
+                user=dict(user),
+                all_bookings=all_bookings,
+                all_rooms=all_rooms,
+                all_users=all_users,
+                occupancy_rate=occupancy_rate,
+                days_until_checkin=days_until_checkin,
+            )
+            summary = get_decision_summary(ai_result)
+
+            # If engine says BLOCK, reject immediately
+            if ai_result["decision"] == "BLOCK":
+                flash("⚠️ Booking blocked by AI security engine. " + (ai_result["reasons"][0] if ai_result["reasons"] else ""), "danger")
+                return redirect(url_for("guest.room_listing"))
+
+            # Store compact summary in session for confirmation page
+            session["ai_decision_result"] = summary
+
+            return render_template(
+                "guest/ai_decision_result.html",
+                room=room_dict,
+                booking_data=booking_data,
+                ai_result=ai_result,
+                summary=summary,
+            )
+
+        except Exception as e:
+            current_app.logger.error(f"AI Decision Engine error: {e}")
+            flash("AI evaluation unavailable. Proceeding with standard booking.", "warning")
+            return redirect(url_for("guest.book_room", room_id=room_id))
+
+    return render_template("guest/book_with_ai.html", room=room_dict)
 
 
-@guest_bp.route("/guest/booking/<booking_id>")
+@guest_bp.route("/api/decision/evaluate", methods=["POST"])
+@login_required
+def api_evaluate_decision():
+    """
+    REST API endpoint — Central AI Decision Engine
+    POST JSON: { room_id, check_in, check_out, num_guests, payment_method }
+    Returns: full AI decision JSON with score, reasons, price, decision
+    """
+    user = get_current_user()
+    if not user:
+        return jsonify({"error": "Unauthorized"}), 401
+
+    data = request.get_json(silent=True) or {}
+    room_id       = data.get("room_id", "")
+    check_in      = data.get("check_in", "")
+    check_out     = data.get("check_out", "")
+    num_guests    = int(data.get("num_guests", 1))
+    payment_method = data.get("payment_method", "card")
+
+    try:
+        db = get_db()
+        room = db.execute("SELECT * FROM rooms WHERE room_id=?", (room_id,)).fetchone()
+        if not room:
+            db.close()
+            return jsonify({"error": "Room not found"}), 404
+
+        room_dict    = dict(room)
+        all_bookings = [dict(b) for b in db.execute("SELECT * FROM bookings").fetchall()]
+        all_rooms    = [dict(r) for r in db.execute("SELECT * FROM rooms").fetchall()]
+        all_users    = [dict(u) for u in db.execute("SELECT * FROM users").fetchall()]
+        occ_total    = db.execute("SELECT COUNT(*) FROM rooms WHERE is_active=1").fetchone()[0] or 1
+        occ_occupied = db.execute("SELECT COUNT(*) FROM rooms WHERE status IN ('occupied','reserved')").fetchone()[0]
+        db.close()
+
+        occupancy_rate = round(occ_occupied / max(occ_total, 1), 2)
+
+        nights = 1
+        try:
+            ci = datetime.strptime(check_in, "%Y-%m-%d").date()
+            co = datetime.strptime(check_out, "%Y-%m-%d").date()
+            nights = max(1, (co - ci).days)
+            days_until = max(0, (ci - datetime.now().date()).days)
+        except Exception:
+            days_until = 7
+
+        total_amount = room_dict.get("current_price", 5000) * nights
+
+        booking_data = {
+            "user_id":        user["user_id"],
+            "room_type":      room_dict.get("room_type", "Single"),
+            "check_in":       check_in,
+            "check_out":      check_out,
+            "guests":         num_guests,
+            "total_amount":   total_amount,
+            "email":          user.get("email", ""),
+            "payment_method": payment_method,
+            "created_at":     datetime.now().isoformat(),
+        }
+
+        from ml_models.ai_decision_engine import evaluate_booking as _ai_eval, get_decision_summary
+        ai_result = _ai_eval(
+            booking=booking_data,
+            room=room_dict,
+            user=dict(user),
+            all_bookings=all_bookings,
+            all_rooms=all_rooms,
+            all_users=all_users,
+            occupancy_rate=occupancy_rate,
+            days_until_checkin=days_until,
+        )
+        return jsonify(get_decision_summary(ai_result))
+
+    except Exception as e:
+        current_app.logger.error(f"API decision error: {e}")
+        return jsonify({"error": str(e), "decision": "APPROVE", "confidence": "50%", "reasons": ["AI evaluation unavailable"]}), 500
+
+
+
+
+@guest_bp.route("/booking/<booking_id>")
 @login_required
 def booking_detail(booking_id):
+    """View booking details"""
     user = get_current_user()
+    if not user:
+        flash("Please login to continue.", "warning")
+        return redirect(url_for("auth.login"))
+
     conn = get_db()
     booking = conn.execute(
-        """SELECT b.*, r.room_type, r.amenities, r.images FROM bookings b
-                              JOIN rooms r ON b.room_id = r.room_id
-                              WHERE b.booking_id = ? AND b.user_id = ?""",
+        """SELECT b.*, r.room_type, r.room_number, r.amenities
+           FROM bookings b
+           JOIN rooms r ON b.room_id = r.room_id
+           WHERE b.booking_id = ? AND b.user_id = ?""",
+        (booking_id, user["user_id"])
+    ).fetchone()
+    conn.close()
+
+    if not booking:
+        flash("Booking not found.", "danger")
+        return redirect(url_for("guest.my_bookings"))
+
+    booking_dict = dict(booking)
+
+    # Parse amenities if stored as JSON
+    try:
+        amenities = json.loads(booking_dict.get("amenities", "[]"))
+        booking_dict["amenities"] = amenities
+    except:
+        booking_dict["amenities"] = []
+
+    return render_template("guest/booking_detail.html", booking=booking_dict)
+
+
+@guest_bp.route("/payment/<booking_id>")
+@guest_bp.route("/guest/payment/<booking_id>")
+@login_required
+def payment_page(booking_id):
+    """Payment page for a booking"""
+    user = get_current_user()
+    if not user:
+        flash("Please login to continue.", "warning")
+        return redirect(url_for("auth.login"))
+
+    conn = get_db()
+    booking = conn.execute(
+        "SELECT * FROM bookings WHERE booking_id = ? AND user_id = ?",
         (booking_id, user["user_id"]),
     ).fetchone()
     conn.close()
@@ -1002,62 +380,37 @@ def booking_detail(booking_id):
         return redirect(url_for("guest.my_bookings"))
 
     booking_dict = dict(booking)
-    booking_dict["amenities"] = json.loads(booking_dict.get("amenities", "[]"))
-
-    try:
-        ci = datetime.strptime(booking_dict["check_in"], "%Y-%m-%d")
-        co = datetime.strptime(booking_dict["check_out"], "%Y-%m-%d")
-        booking_dict["nights"] = (co - ci).days
-        booking_dict["days_until"] = (ci - datetime.now()).days
-    except Exception:
-        booking_dict["nights"] = 1
-        booking_dict["days_until"] = 0
-
-    return render_template("guest/booking_detail.html", booking=booking_dict, user=user)
-
-
-@guest_bp.route("/guest/payment/<booking_id>")
-@login_required
-def payment_page(booking_id):
-    user = get_current_user()
-    conn = get_db()
-    booking = conn.execute(
-        "SELECT * FROM bookings WHERE booking_id = ? AND user_id = ?",
-        (booking_id, user["user_id"]),
-    ).fetchone()
-    if not booking:
-        conn.close()
-        flash("Booking not found.", "danger")
-        return redirect(url_for("guest.my_bookings"))
-
-    booking = dict(booking)
-    if booking.get("payment_status") == "paid":
-        conn.close()
+    if booking_dict.get("payment_status") == "paid":
+        flash("Payment already completed.", "success")
         return redirect(url_for("guest.booking_detail", booking_id=booking_id))
 
-    order_id = booking.get("razorpay_order_id")
-    if not order_id:
-        order_resp = create_order(booking["total_amount"], booking_id)
-        if not order_resp.get("success"):
-            conn.close()
-            flash("Payment gateway unavailable. Please try again later.", "danger")
-            return redirect(url_for("guest.booking_detail", booking_id=booking_id))
-        order_id = order_resp["order"]["id"]
-        conn.execute(
-            "UPDATE bookings SET razorpay_order_id = ? WHERE booking_id = ?",
-            (order_id, booking_id),
-        )
-        conn.commit()
-
-    conn.close()
-    demo_mode = str(order_id).startswith("order_demo") or RAZORPAY_KEY_ID.startswith(
-        "rzp_test_placeholder"
+    order_resp = create_order(
+        booking_dict.get("total_amount", 0),
+        booking_id,
+        notes={"user_id": user.get("user_id", "")},
     )
+    if not order_resp.get("success"):
+        flash("Unable to initialize payment. Please try again.", "danger")
+        return redirect(url_for("guest.booking_detail", booking_id=booking_id))
+
+    order = order_resp.get("order", {})
+    order_id = order.get("id", "")
+    amount_paise = order.get("amount", int(booking_dict.get("total_amount", 0) * 100))
+
+    conn = get_db()
+    conn.execute(
+        "UPDATE bookings SET razorpay_order_id = ?, updated_at = ? WHERE booking_id = ?",
+        (order_id, datetime.now().isoformat(), booking_id),
+    )
+    conn.commit()
+    conn.close()
+
+    demo_mode = str(order_id).startswith("order_demo_")
     return render_template(
         "guest/payment.html",
-        booking=booking,
+        booking=booking_dict,
         order_id=order_id,
-        amount_paise=int(booking["total_amount"] * 100),
+        amount_paise=amount_paise,
         razorpay_key_id=RAZORPAY_KEY_ID,
         demo_mode=demo_mode,
     )
@@ -1066,13 +419,19 @@ def payment_page(booking_id):
 @guest_bp.route("/api/payment/verify", methods=["POST"])
 @login_required
 def verify_payment_api():
-    data = request.json or {}
+    data = request.get_json(silent=True) or {}
     booking_id = data.get("booking_id")
-    razorpay_order_id = data.get("razorpay_order_id")
-    razorpay_payment_id = data.get("razorpay_payment_id")
-    razorpay_signature = data.get("razorpay_signature", "")
+    order_id = data.get("razorpay_order_id")
+    payment_id = data.get("razorpay_payment_id")
+    signature = data.get("razorpay_signature")
+
+    if not booking_id or not order_id or not payment_id or not signature:
+        return jsonify({"success": False, "message": "Missing payment details"}), 400
 
     user = get_current_user()
+    if not user:
+        return jsonify({"success": False, "message": "Unauthorized"}), 401
+
     conn = get_db()
     booking = conn.execute(
         "SELECT * FROM bookings WHERE booking_id = ? AND user_id = ?",
@@ -1082,512 +441,453 @@ def verify_payment_api():
         conn.close()
         return jsonify({"success": False, "message": "Booking not found"}), 404
 
-    booking = dict(booking)
-    if booking.get("payment_status") == "paid":
+    if booking["payment_status"] == "paid":
         conn.close()
-        return jsonify({"success": True, "message": "Payment already completed"})
+        return jsonify({"success": True, "message": "Already paid"})
 
-    order_id = razorpay_order_id or booking.get("razorpay_order_id", "")
-    if not verify_payment(order_id, razorpay_payment_id, razorpay_signature):
+    stored_order = booking["razorpay_order_id"]
+    if stored_order and stored_order != order_id:
+        conn.close()
+        return jsonify({"success": False, "message": "Order mismatch"}), 400
+
+    if not verify_payment(order_id, payment_id, signature):
         conn.close()
         return jsonify({"success": False, "message": "Payment verification failed"}), 400
 
-    # Mark paid
     conn.execute(
-        """UPDATE bookings 
-           SET payment_status = 'paid', status = 'confirmed', payment_id = ?, razorpay_order_id = ?, updated_at = ?
+        """UPDATE bookings
+           SET payment_status = 'paid',
+               status = 'confirmed',
+               payment_id = ?,
+               razorpay_order_id = ?,
+               updated_at = ?
            WHERE booking_id = ?""",
-        (
-            razorpay_payment_id or "",
-            order_id,
-            datetime.now().isoformat(),
-            booking_id,
-        ),
+        (payment_id, order_id, datetime.now().isoformat(), booking_id),
     )
-
-    # Update room status to occupied
-    conn.execute(
-        "UPDATE rooms SET status = 'occupied' WHERE room_id = ?",
-        (booking["room_id"],),
-    )
-
-    # Apply loyalty points and coupons
-    pts_to_use = booking.get("loyalty_points_used", 0)
-    pts_earned = booking.get("loyalty_points_earned", 0)
-    current_points = user.get("loyalty_points", 0)
-    
-    if pts_to_use > 0:
-        current_points -= pts_to_use
-        conn.execute(
-            "INSERT INTO loyalty_transactions (transaction_id, user_id, points, transaction_type, reference_id, description, balance_after) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (str(uuid.uuid4()), user["user_id"], pts_to_use, "spent", booking_id, f"Points redeemed for booking {booking_id}", current_points)
-        )
-
-    if pts_earned > 0:
-        current_points += pts_earned
-        conn.execute(
-            "INSERT INTO loyalty_transactions (transaction_id, user_id, points, transaction_type, reference_id, description, balance_after) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (str(uuid.uuid4()), user["user_id"], pts_earned, "earned", booking_id, f"Points earned from booking {booking_id}", current_points)
-        )
-
-    conn.execute(
-        "UPDATE users SET loyalty_points = ? WHERE user_id = ?",
-        (current_points, user["user_id"]),
-    )
-    if booking.get("coupon_code") and booking.get("discount_amount", 0) > 0:
-        conn.execute(
-            "UPDATE coupons SET used_count = used_count + 1 WHERE code = ?",
-            (booking["coupon_code"],),
-        )
-
-    # Generate QR code
-    try:
-        qr_path = generate_booking_qr(booking_id)
-        conn.execute(
-            "UPDATE bookings SET qr_code_path = ? WHERE booking_id = ?",
-            (qr_path, booking_id),
-        )
-    except Exception:
-        current_app.logger.exception("Failed to generate booking QR (payment)")
-
-    # Add notification
-    conn.execute(
-        """INSERT INTO notifications (notification_id, user_id, title, message, notification_type, action_url)
-                   VALUES (?, ?, ?, ?, 'success', ?)""",
-        (
-            str(uuid.uuid4()),
-            user["user_id"],
-            "Payment Received",
-            f"Payment received for booking {booking_id}. Your stay is confirmed.",
-            f"/guest/booking/{booking_id}",
-        ),
-    )
-
     conn.commit()
     conn.close()
-
-    # Send confirmation email with invoice
-    try:
-        room = None
-        conn = get_db()
-        room = conn.execute(
-            "SELECT room_type, room_number FROM rooms WHERE room_id = ?",
-            (booking["room_id"],),
-        ).fetchone()
-        conn.close()
-        if room:
-            booking["room_type"] = room["room_type"]
-            booking["room_number"] = room["room_number"]
-        invoice_path = generate_gst_invoice(booking, user)
-        send_booking_confirmation(
-            user["email"],
-            user["first_name"],
-            {
-                "booking_id": booking_id,
-                "room_number": booking.get("room_number", ""),
-                "room_type": booking.get("room_type", ""),
-                "check_in": booking.get("check_in"),
-                "check_out": booking.get("check_out"),
-                "num_guests": booking.get("num_guests"),
-                "total_amount": booking.get("total_amount"),
-            },
-            invoice_path,
-        )
-    except Exception:
-        current_app.logger.exception("Failed to send booking confirmation (payment)")
 
     return jsonify({"success": True})
 
 
-@guest_bp.route("/guest/cancel-booking/<booking_id>", methods=["POST"])
+@guest_bp.route("/my-bookings")
+@login_required
+def my_bookings():
+    """List all guest bookings"""
+    user = get_current_user()
+    if not user:
+        flash("Please login to continue.", "warning")
+        return redirect(url_for("auth.login"))
+
+    conn = get_db()
+    bookings = conn.execute(
+        """SELECT b.*, r.room_type, r.room_number
+           FROM bookings b
+           JOIN rooms r ON b.room_id = r.room_id
+           WHERE b.user_id = ?
+           ORDER BY b.created_at DESC""",
+        (user["user_id"],)
+    ).fetchall()
+    conn.close()
+
+    return render_template("guest/bookings.html", user=user, bookings=[dict(b) for b in bookings])
+
+
+@guest_bp.route("/cancel-booking/<booking_id>", methods=["POST"])
 @login_required
 def cancel_booking(booking_id):
+    """Cancel a booking"""
     user = get_current_user()
+    if not user:
+        flash("Please login to continue.", "warning")
+        return redirect(url_for("auth.login"))
+
     conn = get_db()
     booking = conn.execute(
         "SELECT * FROM bookings WHERE booking_id = ? AND user_id = ?",
-        (booking_id, user["user_id"]),
+        (booking_id, user["user_id"])
     ).fetchone()
 
     if not booking:
         conn.close()
-        return jsonify({"success": False, "message": "Booking not found"})
+        flash("Booking not found.", "danger")
+        return redirect(url_for("guest.my_bookings"))
 
-    booking = dict(booking)
     if booking["status"] in ["cancelled", "completed"]:
         conn.close()
-        return jsonify({"success": False, "message": "Cannot cancel this booking"})
+        flash("Cannot cancel this booking.", "danger")
+        return redirect(url_for("guest.my_bookings"))
 
     # Calculate refund
-    ci = datetime.strptime(booking["check_in"], "%Y-%m-%d")
-    hours_until = (ci - datetime.now()).total_seconds() / 3600.0
-    refund_pct = calculate_refund_pct(hours_until, booking.get("payment_status"))
+    check_in = datetime.strptime(booking["check_in"], "%Y-%m-%d")
+    hours_until = (check_in - datetime.now()).total_seconds() / 3600
+    refund_pct = calculate_refund_pct(hours_until, booking["payment_status"])
     refund_amount = booking["total_amount"] * refund_pct
 
+    # Update booking status
     conn.execute(
         "UPDATE bookings SET status = 'cancelled', updated_at = ? WHERE booking_id = ?",
-        (datetime.now().isoformat(), booking_id),
-    )
-    conn.execute(
-        "UPDATE rooms SET status = 'available' WHERE room_id = ?", (booking["room_id"],)
+        (datetime.now().isoformat(), booking_id)
     )
 
-    # Return loyalty points
-    if booking.get("loyalty_points_used", 0) > 0 and booking.get("payment_status") == "paid":
-        conn.execute(
-            "UPDATE users SET loyalty_points = loyalty_points + ? WHERE user_id = ?",
-            (booking["loyalty_points_used"], user["user_id"]),
-        )
+    # Free up the room
+    conn.execute(
+        "UPDATE rooms SET status = 'available' WHERE room_id = ?",
+        (booking["room_id"],)
+    )
 
     conn.commit()
     conn.close()
 
+    # Send cancellation email
     try:
         send_cancellation_email(
-            user["email"], user["first_name"], booking, refund_amount
+            user["email"],
+            user["first_name"],
+            booking,
+            refund_amount
         )
-    except Exception:
-        current_app.logger.exception("Failed to send cancellation email")
+    except Exception as e:
+        current_app.logger.error(f"Failed to send cancellation email: {e}")
 
-    return jsonify(
-        {"success": True, "refund": refund_amount, "refund_pct": int(refund_pct * 100)}
+    flash(f"Booking cancelled. Refund amount: INR {refund_amount:,.2f}", "success")
+    return redirect(url_for("guest.my_bookings"))
+
+
+@guest_bp.route("/dashboard")
+@login_required
+def dashboard():
+    """Guest dashboard"""
+    user = get_current_user()
+    if not user:
+        flash("Please login to continue.", "warning")
+        return redirect(url_for("auth.login"))
+
+    conn = get_db()
+
+    # Get upcoming bookings
+    today = datetime.now().date().isoformat()
+    upcoming = conn.execute(
+        """SELECT b.*, r.room_type, r.room_number
+           FROM bookings b
+           JOIN rooms r ON b.room_id = r.room_id
+           WHERE b.user_id = ? AND b.check_in >= ? AND b.status IN ('confirmed', 'pending')
+           ORDER BY b.check_in ASC LIMIT 5""",
+        (user["user_id"], today)
+    ).fetchall()
+
+    # Get past bookings count
+    past_count = conn.execute(
+        """SELECT COUNT(*) FROM bookings
+           WHERE user_id = ? AND status = 'completed'""",
+        (user["user_id"],)
+    ).fetchone()[0]
+
+    # Get total spent
+    total_spent = conn.execute(
+        """SELECT COALESCE(SUM(total_amount), 0) FROM bookings
+           WHERE user_id = ? AND status IN ('completed', 'confirmed')""",
+        (user["user_id"],)
+    ).fetchone()[0]
+
+    # Get notifications
+    notifications = conn.execute(
+        "SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT 10",
+        (user["user_id"],)
+    ).fetchall()
+    
+    conn.close()
+
+    current_tier = user.get("tier_level", "Silver")
+    current_points = int(user.get("loyalty_points") or 0)
+    
+    if current_tier == "Silver":
+        next_tier = "Gold"
+        next_threshold = 5000
+    elif current_tier == "Gold":
+        next_tier = "Platinum"
+        next_threshold = 15000
+    else:
+        next_tier = "Platinum"
+        next_threshold = 15000
+        
+    tier_progress = min(100, int((current_points / next_threshold) * 100)) if next_threshold else 100
+
+    return render_template(
+        "guest/dashboard.html",
+        user=user,
+        upcoming_bookings=[dict(b) for b in upcoming],
+        past_bookings_count=past_count,
+        total_spent=total_spent,
+        tier_progress=tier_progress,
+        next_threshold=next_threshold,
+        next_tier=next_tier,
+        notifications=[dict(n) for n in notifications]
     )
 
 
-@guest_bp.route("/guest/invoice/<booking_id>")
-@login_required
-def download_invoice(booking_id):
-    user = get_current_user()
-    conn = get_db()
-    booking = conn.execute(
-        """SELECT b.*, r.room_type FROM bookings b JOIN rooms r ON b.room_id = r.room_id 
-                              WHERE b.booking_id = ? AND b.user_id = ?""",
-        (booking_id, user["user_id"]),
-    ).fetchone()
-    conn.close()
-
-    if not booking:
-        flash("Booking not found.", "danger")
-        return redirect(url_for("guest.my_bookings"))
-
-    try:
-        invoice_path = generate_gst_invoice(dict(booking), user)
-        return send_file(
-            invoice_path, as_attachment=True, download_name=f"Invoice_{booking_id}.pdf"
-        )
-    except Exception as e:
-        flash(f"Invoice generation error: {str(e)}", "warning")
-        return redirect(url_for("guest.booking_detail", booking_id=booking_id))
-
-
-@guest_bp.route("/guest/review/<booking_id>", methods=["GET", "POST"])
+@guest_bp.route("/review/<booking_id>", methods=["GET", "POST"])
 @login_required
 def write_review(booking_id):
+    """Write a review for a completed booking"""
     user = get_current_user()
+    if not user:
+        flash("Please login to continue.", "warning")
+        return redirect(url_for("auth.login"))
+
     conn = get_db()
     booking = conn.execute(
-        """SELECT b.*, r.room_type FROM bookings b JOIN rooms r ON b.room_id = r.room_id 
-                              WHERE b.booking_id = ? AND b.user_id = ? AND b.status = 'completed' """,
-        (booking_id, user["user_id"]),
+        """SELECT b.*, r.room_id, r.room_type
+           FROM bookings b
+           JOIN rooms r ON b.room_id = r.room_id
+           WHERE b.booking_id = ? AND b.user_id = ? AND b.status = 'completed'""",
+        (booking_id, user["user_id"])
     ).fetchone()
 
+    if not booking:
+        conn.close()
+        flash("Booking not found or not eligible for review.", "danger")
+        return redirect(url_for("guest.my_bookings"))
+
     if request.method == "POST":
-        rating = float(request.form.get("rating", 5))
+        rating = safe_int(request.form.get("overall_rating", 5), 5)
         comment = request.form.get("comment", "").strip()
-        cleanliness = float(request.form.get("cleanliness", 5))
-        staff_r = float(request.form.get("staff", 5))
-        location = float(request.form.get("location", 5))
-        value = float(request.form.get("value", 5))
-        amenities_r = float(request.form.get("amenities_rating", 5))
+        cleanliness = safe_int(request.form.get("cleanliness_rating", 5), 5)
+        staff = safe_int(request.form.get("staff_rating", 5), 5)
+        location = safe_int(request.form.get("location_rating", 5), 5)
+        value = safe_int(request.form.get("value_rating", 5), 5)
+        amenities = safe_int(request.form.get("amenities_rating", 5), 5)
 
-        # Sentiment analysis
-        from ml_models.models import get_sentiment_analyzer
+        review_id = f"RV{datetime.now().strftime('%Y%m%d%H%M%S')}{uuid.uuid4().hex[:6].upper()}"
 
-        sentiment = get_sentiment_analyzer()
-        analysis = sentiment.analyze(comment)
-
-        # Feed interaction signal to recommendation model
-        try:
-            from ml_models.models import get_recommendation_model
-
-            recommender = get_recommendation_model()
-            if hasattr(recommender, "add_interaction"):
-                recommender.add_interaction(
-                    user["user_id"], booking.get("room_type", "Single"), rating
-                )
-                if hasattr(recommender, "save"):
-                    recommender.save()
-        except Exception:
-            current_app.logger.exception("Failed to record recommendation interaction")
-
-        if booking:
-            room_id = booking["room_id"]
-        else:
-            conn.close()
-            flash("Cannot review this booking.", "danger")
-            return redirect(url_for("guest.my_bookings"))
-
-        review_id = str(uuid.uuid4())
         conn.execute(
-            """INSERT INTO reviews 
-            (review_id, booking_id, user_id, room_id, overall_rating, comment,
-             verified_stay, sentiment, sentiment_score,
-             cleanliness_rating, staff_rating, location_rating, value_rating, amenities_rating)
-            VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?)""",
-            (
-                review_id,
-                booking_id,
-                user["user_id"],
-                room_id,
-                rating,
-                comment,
-                analysis["sentiment"],
-                analysis["score"],
-                cleanliness,
-                staff_r,
-                location,
-                value,
-                amenities_r,
-            ),
+            """INSERT INTO reviews
+               (review_id, booking_id, user_id, room_id, overall_rating, comment,
+                cleanliness_rating, staff_rating, location_rating, value_rating, amenities_rating,
+                created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (review_id, booking_id, user["user_id"], booking["room_id"],
+             rating, comment, cleanliness, staff, location, value, amenities,
+             datetime.now().isoformat())
         )
 
-        # Award bonus points
+        # Award loyalty points for review
+        current_points = user.get("loyalty_points", 0)
+        new_points = current_points + 25
         conn.execute(
-            "UPDATE users SET loyalty_points = loyalty_points + 50 WHERE user_id = ?",
-            (user["user_id"],),
+            "UPDATE users SET loyalty_points = ? WHERE user_id = ?",
+            (new_points, user["user_id"])
         )
 
         conn.commit()
         conn.close()
 
-        flash("Review submitted! You earned 50 bonus loyalty points! ðŸŒŸ", "success")
-        return redirect(url_for("guest.dashboard"))
+        flash("Review submitted successfully! You earned 25 loyalty points!", "success")
+        return redirect(url_for("guest.my_bookings"))
 
-    booking_dict = dict(booking) if booking else None
     conn.close()
-    return render_template("guest/write_review.html", booking=booking_dict, user=user)
+    return render_template("guest/write_review.html", booking=dict(booking))
 
 
-@guest_bp.route("/guest/loyalty")
+@guest_bp.route("/loyalty")
 @login_required
 def loyalty():
+    """View loyalty program details"""
     user = get_current_user()
+    if not user:
+        flash("Please login to continue.", "warning")
+        return redirect(url_for("auth.login"))
+
     conn = get_db()
     transactions = conn.execute(
-        """SELECT * FROM loyalty_transactions WHERE user_id = ? 
-                                   ORDER BY created_at DESC LIMIT 20""",
-        (user["user_id"],),
+        """SELECT * FROM loyalty_transactions
+           WHERE user_id = ?
+           ORDER BY created_at DESC LIMIT 20""",
+        (user["user_id"],)
     ).fetchall()
-    conn.close()
 
     tiers = {
-        "Silver": {
-            "min": 0,
-            "max": 5000,
-            "color": "#C0C0C0",
-            "perks": ["Priority support", "5% discount"],
-        },
-        "Gold": {
-            "min": 5001,
-            "max": 15000,
-            "color": "#D4AF37",
-            "perks": [
-                "Late checkout 2PM",
-                "Priority support",
-                "10% discount",
-                "Birthday offer",
-            ],
-        },
-        "Platinum": {
-            "min": 15001,
-            "max": None,
-            "color": "#E5E4E2",
-            "perks": [
-                "Room upgrade",
-                "Late checkout 3PM",
-                "Airport pickup",
-                "15% discount",
-                "Dedicated manager",
-            ],
-        },
+        "Silver": {"min": 0, "max": 5000, "color": "#C0C0C0", "perks": ["Priority support", "5% discount"]},
+        "Gold": {"min": 5001, "max": 15000, "color": "#D4AF37", "perks": ["Late checkout 2PM", "Priority support", "10% discount", "Birthday offer"]},
+        "Platinum": {"min": 15001, "max": None, "color": "#E5E4E2", "perks": ["Room upgrade", "Late checkout 3PM", "Airport pickup", "15% discount", "Dedicated manager"]}
     }
+
+    current_tier = user.get("tier_level", "Silver")
+    current_points = user.get("loyalty_points", 0)
+
+    # Determine next tier
+    sorted_tiers = sorted(tiers.keys(), key=lambda x: tiers[x]["min"])
+    next_tier = None
+    for tier_name in sorted_tiers:
+        tier = tiers[tier_name]
+        if current_points < tier["min"]:
+            next_tier = tier_name
+            break
+
+    conn.close()
 
     return render_template(
         "guest/loyalty.html",
         user=user,
+        current_points=current_points,
+        current_tier=current_tier,
+        next_tier=next_tier,
         transactions=[dict(t) for t in transactions],
-        tiers=tiers,
+        tiers=tiers
     )
 
 
-@guest_bp.route("/api/validate-coupon", methods=["POST"])
-@login_required
-def validate_coupon():
-    code = request.json.get("code", "").upper()
-    amount = float(request.json.get("amount", 0))
-
-    eligibility = offers_eligibility(session["user_id"])
-    if not eligibility["eligible"]:
-        if eligibility["first_booking_required"] and not eligibility["has_first_booking"]:
-            return jsonify(
-                {
-                    "valid": False,
-                    "message": "Offers unlock after your first paid booking.",
-                }
-            )
-        remaining = eligibility["min_points"] - eligibility["loyalty_points"]
-        return jsonify(
-            {
-                "valid": False,
-                "message": f"Earn {remaining} more loyalty points to unlock offers.",
-            }
-        )
-
+@guest_bp.route("/rooms")
+def room_listing():
+    """Browse available rooms"""
     conn = get_db()
-    coupon = conn.execute(
-        "SELECT * FROM coupons WHERE code = ? AND is_active = 1", (code,)
-    ).fetchone()
-    conn.close()
-
-    if not coupon:
-        return jsonify({"valid": False, "message": "Invalid coupon code"})
-
-    coupon = dict(coupon)
-    if coupon["used_count"] >= coupon["max_uses"]:
-        return jsonify({"valid": False, "message": "Coupon limit reached"})
-
-    if coupon["valid_until"] and coupon["valid_until"] < datetime.now().strftime(
-        "%Y-%m-%d"
-    ):
-        return jsonify({"valid": False, "message": "Coupon has expired"})
-
-    if amount < coupon.get("min_booking_amount", 0):
-        return jsonify(
-            {
-                "valid": False,
-                "message": f'Minimum booking amount: INR {coupon["min_booking_amount"]:,.0f}',
-            }
-        )
-
-    if coupon["discount_type"] == "percentage":
-        discount = amount * coupon["discount_value"] / 100
-    else:
-        discount = coupon["discount_value"]
-
-    return jsonify(
-        {
-            "valid": True,
-            "discount_type": coupon["discount_type"],
-            "discount_value": coupon["discount_value"],
-            "discount_amount": round(discount, 0),
-            "message": f"Coupon applied! You save INR {discount:,.0f}",
-        }
-    )
-
-
-@guest_bp.route("/api/price-calculator", methods=["POST"])
-@login_required
-def price_calculator():
-    data = request.json or {}
-    room_type = data.get("room_type", "")
-    room_id = data.get("room_id", "")
-    check_in = data.get("check_in", "")
-    check_out = data.get("check_out", "")
-
-    if not room_type or not check_in or not check_out:
-        return jsonify({"error": "Missing required fields"}), 400
-
-    try:
-        ci = datetime.strptime(check_in, "%Y-%m-%d")
-        co = datetime.strptime(check_out, "%Y-%m-%d")
-    except Exception:
-        return jsonify({"error": "Invalid date format"}), 400
-
-    if co <= ci:
-        return jsonify({"error": "Check-out must be after check-in"}), 400
-
-    nights = (co - ci).days
-    days_until = (ci.date() - datetime.now().date()).days
-
-    conn = get_db()
-    occ = conn.execute(
-        "SELECT COUNT(*) FROM rooms WHERE status IN ('occupied','reserved')"
+    room_rows = conn.execute(
+        "SELECT * FROM rooms WHERE is_active = 1 AND status = 'available' ORDER BY current_price"
+    ).fetchall()
+    total_rooms = conn.execute(
+        "SELECT COUNT(*) FROM rooms WHERE is_active = 1"
     ).fetchone()[0]
-    total_rooms = conn.execute("SELECT COUNT(*) FROM rooms").fetchone()[0]
-    occ_pct = round(occ / max(total_rooms, 1) * 100, 1)
-    base_price = None
-    if room_id:
-        row = conn.execute(
-            "SELECT current_price FROM rooms WHERE room_id = ?", (room_id,)
-        ).fetchone()
-        if row:
-            base_price = row["current_price"]
     conn.close()
 
-    pricing_engine = get_pricing_engine()
+    all_rooms = []
+    image_map = {
+        "Single": "images/rooms/single.jpg",
+        "Double": "images/rooms/double.jpg",
+        "Family": "images/rooms/family.jpg",
+        "Couple": "images/rooms/couple.jpg",
+        "VIP Suite": "images/rooms/vip.jpg",
+    }
+
+    for r in room_rows:
+        rd = dict(r)
+        # Normalize JSON fields for templates
+        amenities_val = rd.get("amenities", "[]")
+        if isinstance(amenities_val, list):
+            rd["amenities"] = amenities_val
+        else:
+            try:
+                rd["amenities"] = json.loads(amenities_val or "[]")
+            except Exception:
+                rd["amenities"] = []
+        images_val = rd.get("images", "[]")
+        if isinstance(images_val, list):
+            rd["images"] = images_val
+        else:
+            try:
+                rd["images"] = json.loads(images_val or "[]")
+            except Exception:
+                rd["images"] = []
+        # Prefer local images for room cards
+        room_type = rd.get("room_type")
+        local_img = image_map.get(room_type)
+        if local_img:
+            rd["primary_image"] = url_for("static", filename=local_img)
+        elif rd.get("images"):
+            rd["primary_image"] = rd["images"][0]
+        all_rooms.append(rd)
+    room_types = sorted(
+        {r.get("room_type") for r in all_rooms if r.get("room_type")}
+    )
+    type_counts = {}
+    for r in all_rooms:
+        rt = r.get("room_type") or "Unknown"
+        type_counts[rt] = type_counts.get(rt, 0) + 1
+
+    available_count = len(all_rooms)
+    occupancy_pct = (
+        round(((total_rooms - available_count) / total_rooms) * 100, 1)
+        if total_rooms
+        else 0
+    )
+
+    guests_raw = request.args.get("guests", "").strip()
     try:
-        pricing = pricing_engine.calculate_price(
-            room_type,
-            check_in,
-            occ_pct,
-            days_until,
-            base_price=base_price,
-        )
+        guests = int(guests_raw) if guests_raw else ""
     except Exception:
-        return jsonify({"error": "Pricing engine error"}), 500
+        guests = ""
 
-    per_night = pricing.get("final_price") or 0
-    base_amount = per_night * nights
+    filters = {
+        "type": request.args.get("type", "").strip(),
+        "check_in": request.args.get("check_in", "").strip(),
+        "check_out": request.args.get("check_out", "").strip(),
+        "guests": guests,
+        "max_price": request.args.get("max_price", "").strip(),
+        "sort": request.args.get("sort", "price_asc").strip() or "price_asc",
+    }
 
-    return jsonify(
-        {
-            "room_type": room_type,
-            "check_in": check_in,
-            "check_out": check_out,
-            "nights": nights,
-            "per_night": per_night,
-            "base_amount": round(base_amount, 0),
-            "base_price": pricing.get("base_price", base_price),
-            "rules_applied": pricing.get("rules_applied", []),
-            "occupancy_pct": occ_pct,
-        }
-    )
+    rooms = all_rooms
+    if filters["type"]:
+        rooms = [r for r in rooms if r.get("room_type") == filters["type"]]
+    if filters["guests"]:
+        rooms = [
+            r for r in rooms if (r.get("max_guests") or 0) >= filters["guests"]
+        ]
+    if filters["max_price"]:
+        try:
+            max_price = float(filters["max_price"])
+            rooms = [
+                r for r in rooms if float(r.get("current_price") or 0) <= max_price
+            ]
+        except Exception:
+            pass
 
-
-@guest_bp.route("/api/notifications/mark-read", methods=["POST"])
-@login_required
-def mark_notifications_read():
-    user_id = session["user_id"]
-    conn = get_db()
-    conn.execute(
-        "UPDATE notifications SET read_status = 1 WHERE user_id = ?", (user_id,)
-    )
-    conn.commit()
-    conn.close()
-    return jsonify({"success": True})
-
-
-@guest_bp.route("/api/wishlist/toggle", methods=["POST"])
-@login_required
-def toggle_wishlist():
-    room_id = request.json.get("room_id")
-    user_id = session["user_id"]
-    conn = get_db()
-    existing = conn.execute(
-        "SELECT id FROM wishlists WHERE user_id = ? AND room_id = ?", (user_id, room_id)
-    ).fetchone()
-    if existing:
-        conn.execute(
-            "DELETE FROM wishlists WHERE user_id = ? AND room_id = ?",
-            (user_id, room_id),
+    if filters["sort"] == "price_desc":
+        rooms = sorted(
+            rooms, key=lambda r: float(r.get("current_price") or 0), reverse=True
         )
-        action = "removed"
+    elif filters["sort"] == "rating":
+        rooms = sorted(rooms, key=lambda r: float(r.get("rating") or 0), reverse=True)
     else:
-        conn.execute(
-            "INSERT INTO wishlists (user_id, room_id) VALUES (?, ?)", (user_id, room_id)
-        )
-        action = "added"
-    conn.commit()
-    conn.close()
-    return jsonify({"success": True, "action": action})
+        rooms = sorted(rooms, key=lambda r: float(r.get("current_price") or 0))
 
+    return render_template(
+        "public/rooms.html",
+        rooms=rooms,
+        filters=filters,
+        room_types=room_types,
+        type_counts=type_counts,
+        occupancy_pct=occupancy_pct,
+    )
+
+
+@guest_bp.route("/download-invoice/<booking_id>")
+@login_required
+def download_invoice(booking_id):
+    """Generates and downloads a mock GST invoice PDF"""
+    user = get_current_user()
+    conn = get_db()
+    
+    booking = conn.execute(
+        "SELECT * FROM bookings WHERE booking_id = ? AND user_id = ?",
+        (booking_id, user["user_id"])
+    ).fetchone()
+    
+    if not booking:
+        conn.close()
+        flash("Invoice not found or unauthorized.", "danger")
+        return redirect(url_for("guest.dashboard"))
+        
+    booking_dict = dict(booking)
+    room = conn.execute("SELECT room_number, room_type FROM rooms WHERE room_id = ?", (booking_dict["room_id"],)).fetchone()
+    if room:
+        booking_dict["room_number"] = dict(room).get("room_number")
+        booking_dict["room_type"] = dict(room).get("room_type")
+        
+    conn.close()
+    
+    try:
+        from services.pdf_service import generate_gst_invoice
+        from flask import send_file
+        import os
+        
+        pdf_path = generate_gst_invoice(booking_dict, user)
+        
+        if pdf_path and os.path.exists(pdf_path):
+            return send_file(pdf_path, as_attachment=True)
+        else:
+            flash("Failed to generate invoice.", "warning")
+            return redirect(url_for("guest.dashboard"))
+            
+    except Exception as e:
+        flash(f"Error generating invoice: {str(e)}", "danger")
+        return redirect(url_for("guest.dashboard"))

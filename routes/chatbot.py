@@ -674,7 +674,7 @@ def _create_support_request(user_id, details, request_type="", room_number=""):
             user_id,
             "Request Received",
             f"Your request has been logged. Reference: {ticket_id}",
-            "/guest/dashboard",
+            "/dashboard",
         ),
     )
     conn.commit()

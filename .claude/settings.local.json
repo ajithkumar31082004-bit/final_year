@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python test_ai_decision_engine.py)",
+      "Bash(python:*)",
+      "Bash(pip install:*)"
+    ]
+  }
+}

@@ -1,4 +1,8 @@
 {% extends "base.html" %}
+{% set filters = filters|default({}) %}
+{% set room_types = room_types|default([]) %}
+{% set type_counts = type_counts|default({}) %}
+{% set occupancy_pct = occupancy_pct|default(0) %}
 {% block title %}Rooms — Blissful Abodes{% endblock %}
 {% block content %}
 <div style="background:var(--gradient-dark);padding:3rem 0;text-align:center;">
@@ -58,7 +62,7 @@
             <!-- Availability legend -->
             <div style="display:flex;gap:1rem;font-size:0.8rem;flex-wrap:wrap;">
                 {% for rt, count in type_counts.items() %}
-                <span><span style="font-weight:700;color:{{ 'var(--danger)' if count < 3 else 'var(--success)' }};">{{ count }}</span> {{ rt }}</span>
+                <span><span style="font-weight:700;color:{% if count < 3 %}var(--danger){% else %}var(--success){% endif %};">{{ count }}</span> {{ rt }}</span>
                 {% endfor %}
             </div>
         </div>
@@ -67,15 +71,15 @@
             <div class="room-card">
                 <div class="room-card-image">
                     {% if room.room_type == 'VIP Suite' %}
-                    {% set fallback_file = 'images/rooms/vip.svg' %}
+                    {% set fallback_file = 'images/rooms/vip.jpg' %}
                     {% elif room.room_type == 'Couple' %}
-                    {% set fallback_file = 'images/rooms/couple.svg' %}
+                    {% set fallback_file = 'images/rooms/couple.jpg' %}
                     {% elif room.room_type == 'Family' %}
-                    {% set fallback_file = 'images/rooms/family.svg' %}
+                    {% set fallback_file = 'images/rooms/family.jpg' %}
                     {% elif room.room_type == 'Double' %}
-                    {% set fallback_file = 'images/rooms/double.svg' %}
+                    {% set fallback_file = 'images/rooms/double.jpg' %}
                     {% else %}
-                    {% set fallback_file = 'images/rooms/single.svg' %}
+                    {% set fallback_file = 'images/rooms/single.jpg' %}
                     {% endif %}
                     {% set fallback_img = url_for('static', filename=fallback_file) %}
                     {% set primary_img = room.primary_image if room.primary_image else (room.images[0] if room.images and room.images|length > 0 else fallback_img) %}
@@ -122,21 +126,23 @@
                     <div style="font-size:0.72rem;color:var(--text-muted);margin-top:0.3rem;">Select dates to see dynamic price</div>
                     {% endif %}
                 </div>
-                <div class="room-card-footer">
+                <div class="room-card-footer" style="padding:1.25rem;">
                     <div>
                         <div class="viewer-badge">👀 {{ [3,5,8,12,2]|random }} viewing</div>
-                        {% if room.price_rules %}<div style="font-size:0.7rem;color:var(--info);">🤖 AI priced</div>{% endif %}
+                        {% if room.price_rules %}<div class="room-badge" style="background:#dcfce7;color:#16a34a;margin-top:0.5rem;">🤖 AI priced</div>{% endif %}
                     </div>
-                    <div style="display:flex;gap:0.5rem;">
-                        <a href="{{ url_for('guest.room_detail', room_id=room.room_id) }}" class="btn btn-outline btn-sm">Details</a>
+                    <div style="display:flex;gap:0.5rem;flex-wrap:wrap;justify-content:flex-end;">
+                        <a href="{{ url_for('guest.book_room', room_id=room.room_id) }}" class="btn btn-outline btn-sm">Details</a>
                         {% if room.status != 'occupied' %}
-                        {% if filters.check_in and filters.check_out %}
-                        <a href="{{ url_for('guest.book_room', room_id=room.room_id, check_in=filters.check_in, check_out=filters.check_out, guests=filters.guests) }}" class="btn btn-primary btn-sm">Book</a>
+                            {% if filters.check_in and filters.check_out %}
+                            <a href="{{ url_for('guest.book_room', room_id=room.room_id) }}" class="btn btn-sm" style="background:#fef3c7;color:#d97706;border:1px solid #fde68a;">⚡ Quick Book</a>
+                            <a href="{{ url_for('guest.book_room', room_id=room.room_id, check_in=filters.check_in, check_out=filters.check_out, guests=filters.guests) }}" class="btn btn-primary btn-sm">Book</a>
+                            {% else %}
+                            <a href="{{ url_for('guest.book_room', room_id=room.room_id) }}" class="btn btn-sm" style="background:#fef3c7;color:#d97706;border:1px solid #fde68a;">⚡ Quick Book</a>
+                            <a href="{{ url_for('guest.book_room', room_id=room.room_id) }}" class="btn btn-primary btn-sm">Book</a>
+                            {% endif %}
                         {% else %}
-                        <a href="{{ url_for('guest.book_room', room_id=room.room_id) }}" class="btn btn-primary btn-sm">Book</a>
-                        {% endif %}
-                        {% else %}
-                        <button class="btn btn-sm" style="background:#ddd;color:#888;cursor:not-allowed;">Occupied</button>
+                            <button class="btn btn-sm" style="background:#ddd;color:#888;cursor:not-allowed;">Occupied</button>
                         {% endif %}
                     </div>
                 </div>
