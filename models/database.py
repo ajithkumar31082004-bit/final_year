@@ -1,13 +1,18 @@
 """
 Blissful Abodes - Database Models
-SQLite-based database with all tables for the hotel management system
+Supports both SQLite (local) and MySQL (production)
 """
 
 import sqlite3
 import os
+import pymysql
 from datetime import datetime
 from flask import g, has_app_context
+from urllib.parse import urlparse
 
+# Determine database type
+DATABASE_URL = os.environ.get("DATABASE_URL") or os.environ.get("MYSQL_PUBLIC_URL")
+USE_MYSQL = bool(DATABASE_URL)
 DATABASE_PATH = os.environ.get("DATABASE_PATH", "blissful_abodes.db")
 
 
@@ -24,20 +29,60 @@ class _ConnectionProxy:
 
 
 def get_db():
-    """Get database connection"""
+    """Get database connection (MySQL or SQLite)"""
     if has_app_context():
         conn = g.get("_db_conn")
         if conn is None:
-            conn = sqlite3.connect(DATABASE_PATH)
-            conn.row_factory = sqlite3.Row
-            conn.execute("PRAGMA foreign_keys = ON")
+            if USE_MYSQL:
+                conn = _get_mysql_connection()
+            else:
+                conn = sqlite3.connect(DATABASE_PATH)
+                conn.row_factory = sqlite3.Row
+                conn.execute("PRAGMA foreign_keys = ON")
             g._db_conn = conn
         return _ConnectionProxy(conn)
 
+    if USE_MYSQL:
+        return _get_mysql_connection()
+    
     conn = sqlite3.connect(DATABASE_PATH)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     return conn
+
+
+def _get_mysql_connection():
+    """Create MySQL connection from DATABASE_URL or individual env vars"""
+    try:
+        if "://" in DATABASE_URL:
+            # Parse MySQL connection URL
+            parsed = urlparse(DATABASE_URL)
+            host = parsed.hostname
+            user = parsed.username
+            password = parsed.password
+            database = parsed.path.lstrip("/")
+            port = parsed.port or 3306
+        else:
+            # Use individual environment variables
+            host = os.environ.get("MYSQL_HOST")
+            user = os.environ.get("MYSQL_USER")
+            password = os.environ.get("MYSQL_PASSWORD")
+            database = os.environ.get("MYSQL_DB")
+            port = int(os.environ.get("MYSQL_PORT", 3306))
+        
+        conn = pymysql.connect(
+            host=host,
+            user=user,
+            password=password,
+            database=database,
+            port=port,
+            charset="utf8mb4",
+            cursorclass=pymysql.cursors.DictCursor
+        )
+        return conn
+    except Exception as e:
+        print(f"[DB] MySQL connection failed: {e}")
+        raise
 
 
 def close_db(error=None):

@@ -439,10 +439,44 @@ def create_app(config_name="default"):
             except Exception as e:
                 print(f"[SCHEDULER] Price update error: {e}")
 
+        def auto_assign_shifts():
+            """Daily staff shift auto-assignment — runs at 00:05 every night."""
+            try:
+                with app.app_context():
+                    from services.shift_scheduler import assign_daily_shifts
+                    result = assign_daily_shifts()
+                    print(
+                        f"[SCHEDULER] Shifts assigned: {result['assigned']} staff | "
+                        f"date={result['date']} | occupancy={result.get('occupancy_pct', 0)}%"
+                    )
+            except Exception as e:
+                print(f"[SCHEDULER] Shift assignment error: {e}")
+
         scheduler = BackgroundScheduler()
         scheduler.add_job(auto_update_prices, "interval", hours=1)
+        # Run daily shift scheduling at 00:05 every day
+        scheduler.add_job(
+            auto_assign_shifts,
+            trigger="cron",
+            hour=0,
+            minute=5,
+            id="daily_shift_scheduler",
+        )
         scheduler.start()
         print("[SCHEDULER] Background scheduler started")
+
+        # Assign today's shifts immediately on startup (if not already done)
+        try:
+            with app.app_context():
+                from services.shift_scheduler import assign_daily_shifts
+                result = assign_daily_shifts()
+                if result["assigned"] > 0:
+                    print(f"[SHIFT] Startup: assigned {result['assigned']} shifts for today ({result['date']})")
+                else:
+                    print(f"[SHIFT] Startup: today's shifts already exist ({result['date']})")
+        except Exception as e:
+            print(f"[SHIFT] Startup shift assignment skipped: {e}")
+
     except Exception as e:
         print(f"[SCHEDULER] Could not start scheduler: {e}")
 

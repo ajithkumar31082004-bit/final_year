@@ -30,21 +30,22 @@ class OpenAIDecisionAgent:
     """
 
     def __init__(self):
-        self.gemini_key = os.environ.get("GEMINI_API_KEY", "")
         self._gemini_model = None
-        self._init_attempted = False
+
+    @property
+    def gemini_key(self):
+        """Always read fresh from environment so dotenv changes are picked up."""
+        return os.environ.get("GEMINI_API_KEY", "") or os.environ.get("GOOGLE_API_KEY", "")
 
     @property
     def gemini_model(self):
-        """Lazily initialise Gemini on first real use."""
-        if not self._init_attempted:
-            self._init_attempted = True
-            if self.gemini_key and _GENAI_AVAILABLE:
-                try:
-                    genai.configure(api_key=self.gemini_key)
-                    self._gemini_model = genai.GenerativeModel("gemini-2.5-flash")
-                except Exception as e:
-                    print(f"[Gemini] Failed to initialise: {e}")
+        """Lazily initialise Gemini on first real use. Retries if key is now available."""
+        if self._gemini_model is None and self.gemini_key and _GENAI_AVAILABLE:
+            try:
+                genai.configure(api_key=self.gemini_key)
+                self._gemini_model = genai.GenerativeModel("gemini-2.5-flash")
+            except Exception as e:
+                print(f"[Gemini] Failed to initialise: {e}")
         return self._gemini_model
 
     def is_configured(self):

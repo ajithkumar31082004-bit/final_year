@@ -22,6 +22,12 @@ from models.database import get_db
 from services.ai_chat_service import generate_ai_reply
 from services.security import hash_password
 from ml_models.openai_agent import openai_agent
+from services.shift_scheduler import (
+    get_today_shifts,
+    get_staff_shift_today,
+    get_shifts_for_date,
+    assign_daily_shifts,
+)
 
 staff_bp = Blueprint("staff", __name__)
 
@@ -183,9 +189,13 @@ def dashboard():
             rooms_by_floor[fl] = []
         rooms_by_floor[fl].append(rd)
 
+    # Today's shift for the logged-in staff member
+    my_shift = get_staff_shift_today(user["user_id"])
+
     return render_template(
         "staff/dashboard.html",
         user=user,
+        my_shift=my_shift,
         stats={
             "checkins_today": checkins_today,
             "checkouts_today": checkouts_today,
@@ -574,3 +584,78 @@ def staff_chatbot_message():
 
     reply = openai_agent.handle_staff_message(message, context)
     return jsonify({"ok": True, "reply": reply})
+
+
+# ── Shift Scheduling APIs ──────────────────────────────────────────────────────
+
+@staff_bp.route("/api/shifts/today", methods=["GET"])
+@staff_required
+def api_shifts_today():
+    """Return all staff shifts scheduled for today."""
+    shifts = get_today_shifts()
+    return jsonify({"date": shifts[0]["date"] if shifts else None, "shifts": shifts})
+
+
+@staff_bp.route("/api/shifts/date/<target_date>", methods=["GET"])
+@staff_required
+def api_shifts_for_date(target_date):
+    """Return all staff shifts for a specific date (YYYY-MM-DD)."""
+    shifts = get_shifts_for_date(target_date)
+    return jsonify({"date": target_date, "shifts": shifts})
+
+
+@staff_bp.route("/api/shifts/my", methods=["GET"])
+@staff_required
+def api_my_shift():
+    """Return the logged-in staff member's shift for today."""
+    my_shift = get_staff_shift_today(session["user_id"])
+    return jsonify(my_shift)
+
+
+@staff_bp.route("/api/shifts/generate", methods=["POST"])
+@staff_required
+def api_generate_shifts():
+    """
+    Manager/Admin endpoint — manually trigger shift generation for today.
+    Useful to regenerate after adding new staff members.
+    """
+    if session.get("user_role") not in ["manager", "admin", "superadmin"]:
+        return jsonify({"success": False, "message": "Manager access required."}), 403
+    try:
+        result = assign_daily_shifts()
+        return jsonify({"success": True, **result})
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e)}), 500
+
+
+@staff_bp.route("/api/shifts/<shift_id>/status", methods=["POST"])
+@staff_required
+def api_update_shift_status(shift_id):
+    """Staff marks their shift as 'active' (clocked in) or 'completed' (clocked out)."""
+    new_status = request.json.get("status")
+    if new_status not in ["scheduled", "active", "completed", "absent"]:
+        return jsonify({"success": False, "message": "Invalid status."}), 400
+
+    conn = get_db()
+    shift = conn.execute(
+        "SELECT * FROM staff_shifts WHERE shift_id = ?", (shift_id,)
+    ).fetchone()
+
+    if not shift:
+        conn.close()
+        return jsonify({"success": False, "message": "Shift not found."}), 404
+
+    shift = dict(shift)
+    # Staff can only update their own shift; managers can update any
+    if (shift["staff_id"] != session["user_id"] and
+            session.get("user_role") not in ["manager", "admin", "superadmin"]):
+        conn.close()
+        return jsonify({"success": False, "message": "Unauthorized."}), 403
+
+    conn.execute(
+        "UPDATE staff_shifts SET status = ? WHERE shift_id = ?",
+        (new_status, shift_id)
+    )
+    conn.commit()
+    conn.close()
+    return jsonify({"success": True, "shift_id": shift_id, "status": new_status})
