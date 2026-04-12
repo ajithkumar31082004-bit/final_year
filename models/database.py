@@ -5,10 +5,15 @@ Supports both SQLite (local) and MySQL (production)
 
 import sqlite3
 import os
-import pymysql
 from datetime import datetime
 from flask import g, has_app_context
 from urllib.parse import urlparse
+
+# Import pymysql only when needed (for MySQL connections)
+try:
+    import pymysql
+except ImportError:
+    pymysql = None
 
 # Determine database type
 DATABASE_URL = os.environ.get("DATABASE_URL") or os.environ.get("MYSQL_PUBLIC_URL")

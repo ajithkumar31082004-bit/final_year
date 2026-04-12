@@ -1,0 +1,249 @@
+{% extends "base.html" %}
+{% block title %}📈 Demand Forecast — Manager Planning{% endblock %}
+{% block content %}
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@latest"></script>
+
+<style>
+:root {
+  --navy: #0f172a;
+  --gold: #f59e0b;
+  --emerald: #10b981;
+  --red: #ef4444;
+  --blue: #3b82f6;
+  --panel-bg: rgba(255, 255, 255, 0.85);
+  --panel-shadow: 0 10px 40px -10px rgba(15, 23, 42, 0.1);
+  --radius: 20px;
+}
+
+* { box-sizing: border-box; }
+body { font-family: 'Inter', -apple-system, sans-serif; background: #f8fafc; }
+
+.mgr-layout { display: flex; min-height: 100vh; background: #f8fafc; background-image: radial-gradient(at 0% 0%, hsla(253,16%,7%,0.04) 0px, transparent 50%), radial-gradient(at 100% 0%, hsla(210,100%,56%,0.04) 0px, transparent 50%), radial-gradient(at 100% 100%, hsla(140,100%,55%,0.04) 0px, transparent 50%); }
+.mgr-main { flex: 1; padding: 2.5rem 3rem; overflow-y: auto; min-width: 0; }
+
+.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2.5rem; }
+.page-title { font-size: 2.2rem; font-weight: 800; color: var(--navy); letter-spacing: -0.02em; }
+.page-title span { background: linear-gradient(135deg, var(--gold) 0%, #f97316 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+.avg-badge { background: rgba(59,130,246,0.1); color: #1e40af; padding: 0.6rem 1.2rem; border-radius: 999px; font-weight: 700; }
+
+.panel { background: var(--panel-bg); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.5); border-radius: var(--radius); box-shadow: var(--panel-shadow); padding: 1.75rem; margin-bottom: 2rem; }
+.panel-title { font-size: 1.2rem; font-weight: 700; color: var(--navy); margin-bottom: 1.5rem; display: flex; align-items: center; gap: 0.75rem; border-bottom: 2px solid rgba(245,158,11,0.1); padding-bottom: 1rem; }
+
+.chart-container { position: relative; height: 350px; margin-bottom: 2rem; background: rgba(248,250,252,0.5); padding: 1.5rem; border-radius: var(--radius); }
+
+.suggestions-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.25rem; margin-bottom: 2rem; }
+
+.suggestion-card { background: linear-gradient(135deg, rgba(255,255,255,0.95), rgba(248,250,252,0.9)); border-left: 4px solid var(--gold); border-radius: 12px; padding: 1.25rem; }
+.suggestion-card.green { border-left-color: var(--emerald); }
+.suggestion-card.red { border-left-color: var(--red); }
+.suggestion-icon { font-size: 1.8rem; margin-bottom: 0.5rem; }
+.suggestion-text { font-size: 0.9rem; color: #475569; line-height: 1.5; }
+
+.days-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 1rem; }
+.day-badge { background: linear-gradient(135deg, rgba(255,255,255,0.95), rgba(248,250,252,0.9)); border: 2px solid var(--emerald); border-radius: 12px; padding: 0.75rem; text-align: center; color: #15803d; font-weight: 700; font-size: 0.8rem; }
+.day-badge.low { border-color: var(--red); color: #b91c1c; background: linear-gradient(135deg, rgba(254,226,226,0.8), rgba(254,202,202,0.8)); }
+
+.stat-row { display: flex; justify-content: space-between; align-items: center; padding: 1rem; background: rgba(248,250,252,0.6); border-radius: 10px; margin-bottom: 0.75rem; }
+.stat-label { font-weight: 600; color: #475569; }
+.stat-value { font-size: 1.3rem; font-weight: 800; color: var(--navy); }
+
+@media (max-width: 1024px) {
+  .mgr-main { padding: 1.5rem; }
+  .chart-container { height: 300px; }
+}
+
+@media (max-width: 768px) {
+  .page-title { font-size: 1.5rem; }
+  .suggestions-grid { grid-template-columns: 1fr; }
+  .chart-container { height: 250px; }
+}
+</style>
+
+<div class="mgr-layout">
+  <div class="mgr-main">
+    
+    <!-- Page Header -->
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">📈 <span>30-Day Demand Forecast</span></h1>
+        <p style="margin: 0.5rem 0 0; color: #64748b; font-size: 0.9rem;">AI-powered occupancy prediction for business planning</p>
+      </div>
+      <div class="avg-badge">
+        Avg: {{ suggestions.avg_occupancy }}%
+      </div>
+    </div>
+
+    <!-- Forecast Chart -->
+    <div class="panel">
+      <div class="panel-title">📊 Occupancy Forecast Chart</div>
+      <div class="chart-container">
+        <canvas id="forecastChart"></canvas>
+      </div>
+    </div>
+
+    <!-- AI Suggestions -->
+    <div class="panel">
+      <div class="panel-title">💡 AI Business Suggestions</div>
+      <div class="suggestions-grid">
+        {% for suggestion in suggestions.recommendations %}
+          {% if "increase" in suggestion.lower() or "High" in suggestion %}
+          <div class="suggestion-card">
+            <div class="suggestion-icon">📈</div>
+            <div class="suggestion-text"><strong>{{ suggestion }}</strong></div>
+          </div>
+          {% elif "discount" in suggestion.lower() or "Low" in suggestion %}
+          <div class="suggestion-card red">
+            <div class="suggestion-icon">💰</div>
+            <div class="suggestion-text"><strong>{{ suggestion }}</strong></div>
+          </div>
+          {% elif "Peak" in suggestion or "High" in suggestion %}
+          <div class="suggestion-card green">
+            <div class="suggestion-icon">🔥</div>
+            <div class="suggestion-text"><strong>{{ suggestion }}</strong></div>
+          </div>
+          {% else %}
+          <div class="suggestion-card">
+            <div class="suggestion-icon">⚡</div>
+            <div class="suggestion-text"><strong>{{ suggestion }}</strong></div>
+          </div>
+          {% endif %}
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- Peak & Low Days -->
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin-bottom: 2rem;">
+      
+      <!-- Peak Days -->
+      <div class="panel">
+        <div class="panel-title">🔥 High Demand Days ({{ suggestions.peak_days|length }})</div>
+        {% if suggestions.peak_days %}
+          <div class="days-grid">
+            {% for day in suggestions.peak_days %}
+            <div class="day-badge">{{ day }}</div>
+            {% endfor %}
+          </div>
+          <div style="margin-top: 1rem; padding: 1rem; background: rgba(34,197,94,0.05); border-radius: 10px; color: #15803d; font-size: 0.9rem;">
+            ✅ Maximize pricing on these days. Consider premium offerings.
+          </div>
+        {% else %}
+          <p style="color: #94a3b8; font-style: italic;">No peak days in forecast period</p>
+        {% endif %}
+      </div>
+
+      <!-- Low Days -->
+      <div class="panel">
+        <div class="panel-title">❄️ Low Demand Days ({{ suggestions.low_days|length }})</div>
+        {% if suggestions.low_days %}
+          <div class="days-grid">
+            {% for day in suggestions.low_days %}
+            <div class="day-badge low">{{ day }}</div>
+            {% endfor %}
+          </div>
+          <div style="margin-top: 1rem; padding: 1rem; background: rgba(239,68,68,0.05); border-radius: 10px; color: #b91c1c; font-size: 0.9rem;">
+            💰 Launch promotional discounts on these days to boost occupancy.
+          </div>
+        {% else %}
+          <p style="color: #94a3b8; font-style: italic;">No low demand days in forecast period</p>
+        {% endif %}
+      </div>
+
+    </div>
+
+    <!-- Summary Stats -->
+    <div class="panel">
+      <div class="panel-title">📊 Forecast Summary</div>
+      <div class="stat-row">
+        <span class="stat-label">Average Occupancy Rate:</span>
+        <span class="stat-value" style="color: var(--blue);">{{ suggestions.avg_occupancy }}%</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Peak Days Count:</span>
+        <span class="stat-value" style="color: var(--emerald);">{{ suggestions.peak_days|length }}</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Low Demand Days:</span>
+        <span class="stat-value" style="color: var(--red);">{{ suggestions.low_days|length }}</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Forecast Period:</span>
+        <span class="stat-value">30 Days</span>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+const forecastData = {{ forecast_data|tojson }};
+const dates = forecastData.map(d => d.date);
+const occupancies = forecastData.map(d => d.occupancy_pct);
+
+const maxOccupancy = Math.max(...occupancies, 100);
+const context = document.getElementById('forecastChart').getContext('2d');
+
+new Chart(context, {
+  type: 'line',
+  data: {
+    labels: dates,
+    datasets: [{
+      label: 'Predicted Occupancy %',
+      data: occupancies,
+      borderColor: '#f59e0b',
+      backgroundColor: 'rgba(245, 158, 11, 0.1)',
+      borderWidth: 3,
+      fill: true,
+      tension: 0.35,
+      pointRadius: 5,
+      pointHoverRadius: 7,
+      pointBackgroundColor: occupancies.map(o => 
+        o >= 75 ? '#10b981' : 
+        o <= 40 ? '#ef4444' : 
+        '#3b82f6'
+      ),
+      pointBorderColor: '#fff',
+      pointBorderWidth: 2,
+      pointHoverBackgroundColor: '#f59e0b',
+      segment: {
+        borderColor: ctx => {
+          const value = occupancies[ctx.p0DataIndex];
+          return value >= 75 ? '#10b981' : value <= 40 ? '#ef4444' : '#3b82f6';
+        }
+      }
+    }]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    interaction: { mode: 'index', intersect: false },
+    plugins: {
+      legend: { display: true, labels: { font: { size: 12, weight: '600' }, padding: 15 } },
+      tooltip: { 
+        backgroundColor: 'rgba(15, 23, 42, 0.9)',
+        titleFont: { size: 13, weight: 'bold' },
+        bodyFont: { size: 12 },
+        padding: 12,
+        borderRadius: 8,
+        titleColor: '#fff',
+        bodyColor: '#fff'
+      }
+    },
+    scales: {
+      y: {
+        min: 0,
+        max: 100,
+        ticks: { font: { size: 12 }, color: '#64748b', stepSize: 20 },
+        grid: { color: 'rgba(99, 102, 241, 0.05)' },
+        title: { display: true, text: 'Occupancy %', font: { size: 13, weight: '600' }, color: '#475569' }
+      },
+      x: {
+        ticks: { font: { size: 11 }, color: '#64748b', maxRotation: 45, minRotation: 0 },
+        grid: { display: false }
+      }
+    }
+  }
+});
+</script>
+
+{% endblock %}

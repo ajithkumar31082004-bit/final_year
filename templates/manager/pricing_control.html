@@ -1,0 +1,168 @@
+{% extends "base.html" %}
+{% block title %}💰 Dynamic Pricing Control — Manager{% endblock %}
+{% block content %}
+
+<style>
+:root {
+  --navy: #0f172a;
+  --gold: #f59e0b;
+  --emerald: #10b981;
+  --red: #ef4444;
+  --blue: #3b82f6;
+  --panel-bg: rgba(255, 255, 255, 0.85);
+  --panel-shadow: 0 10px 40px -10px rgba(15, 23, 42, 0.1);
+  --radius: 20px;
+}
+
+* { box-sizing: border-box; }
+body { font-family: 'Inter', -apple-system, sans-serif; background: #f8fafc; }
+
+.mgr-layout { display: flex; min-height: 100vh; background: #f8fafc; background-image: radial-gradient(at 0% 0%, hsla(253,16%,7%,0.04) 0px, transparent 50%), radial-gradient(at 100% 0%, hsla(210,100%,56%,0.04) 0px, transparent 50%), radial-gradient(at 100% 100%, hsla(140,100%,55%,0.04) 0px, transparent 50%); }
+.mgr-main { flex: 1; padding: 2.5rem 3rem; overflow-y: auto; min-width: 0; }
+
+.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2.5rem; }
+.page-title { font-size: 2.2rem; font-weight: 800; color: var(--navy); letter-spacing: -0.02em; }
+.page-title span { background: linear-gradient(135deg, var(--gold) 0%, #f97316 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+.occ-badge { background: #dcfce7; color: #15803d; padding: 0.6rem 1.2rem; border-radius: 999px; font-weight: 700; }
+
+.panel { background: var(--panel-bg); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.5); border-radius: var(--radius); box-shadow: var(--panel-shadow); padding: 1.75rem; margin-bottom: 2rem; }
+.panel-title { font-size: 1.2rem; font-weight: 700; color: var(--navy); margin-bottom: 1.5rem; display: flex; align-items: center; gap: 0.75rem; border-bottom: 2px solid rgba(245,158,11,0.1); padding-bottom: 1rem; }
+
+.pricing-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1.5rem; }
+
+.pricing-card { background: linear-gradient(135deg, rgba(255,255,255,0.95), rgba(248,250,252,0.9)); border: 2px solid rgba(245,158,11,0.2); border-radius: var(--radius); padding: 1.5rem; transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+.pricing-card:hover { transform: translateY(-8px); border-color: var(--gold); box-shadow: 0 12px 40px rgba(245,158,11,0.15); }
+
+.room-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+.room-name { font-size: 1.1rem; font-weight: 700; color: var(--navy); }
+.room-number { font-size: 0.8rem; background: rgba(245,158,11,0.1); color: var(--gold); padding: 0.3rem 0.7rem; border-radius: 6px; }
+
+.price-row { display: flex; justify-content: space-between; align-items: center; padding: 0.75rem 0; border-bottom: 1px solid rgba(15,23,42,0.05); }
+.price-label { font-size: 0.85rem; color: #64748b; font-weight: 600; }
+.price-value { font-size: 1.1rem; font-weight: 800; color: var(--navy); }
+.price-ai { color: var(--gold); }
+.price-current { color: var(--blue); }
+
+.price-change { padding: 0.75rem; background: rgba(248,250,252,0.8); border-left: 3px solid rgba(245,158,11,0.3); border-radius: 6px; margin: 1rem 0; }
+.change-direction { font-size: 0.9rem; font-weight: 700; margin-bottom: 0.5rem; }
+.change-up { color: var(--emerald); }
+.change-down { color: var(--red); }
+.change-reasons { font-size: 0.8rem; color: #64748b; margin-top: 0.5rem; }
+.change-reasons li { margin: 0.2rem 0; }
+
+.btn-override { width: 100%; padding: 0.8rem; margin-top: 1rem; background: linear-gradient(135deg, var(--gold), #f97316); color: white; border: none; border-radius: 10px; font-weight: 700; cursor: pointer; transition: all 0.2s; }
+.btn-override:hover { transform: scale(1.02); box-shadow: 0 8px 20px rgba(245,158,11,0.3); }
+
+.info-box { background: rgba(59,130,246,0.05); border: 1px solid rgba(59,130,246,0.2); border-radius: 12px; padding: 1rem; margin-bottom: 1.5rem; font-size: 0.9rem; color: #1e40af; }
+
+@media (max-width: 1024px) {
+  .pricing-grid { grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); }
+}
+
+@media (max-width: 768px) {
+  .mgr-main { padding: 1.5rem; }
+  .pricing-grid { grid-template-columns: 1fr; }
+  .btn-override { padding: 0.7rem; font-size: 0.95rem; }
+}
+</style>
+
+<div class="mgr-layout">
+  <div class="mgr-main">
+    
+    <!-- Page Header -->
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">💰 <span>Dynamic Pricing Control</span></h1>
+        <p style="margin: 0.5rem 0 0; color: #64748b; font-size: 0.9rem;">View and override AI-calculated room prices</p>
+      </div>
+      <div class="occ-badge">
+        🟢 Occupancy: {{ occupancy_rate }}%
+      </div>
+    </div>
+
+    <!-- Info Box -->
+    <div class="info-box">
+      📊 <strong>How it works:</strong> AI analyzes occupancy, demand, and season to suggest optimal prices. You can override any price manually with a reason for audit logging.
+    </div>
+
+    <!-- Pricing Cards -->
+    <div class="pricing-grid">
+      {% for room in pricing_data %}
+      <div class="pricing-card">
+        <div class="room-header">
+          <span class="room-name">{{ room.room_type }}</span>
+          <span class="room-number">Room {{ room.room_number }}</span>
+        </div>
+
+        <div class="price-row">
+          <span class="price-label">💵 Base Price</span>
+          <span class="price-value">₹{{ "%.0f"|format(room.base_price) }}</span>
+        </div>
+
+        <div class="price-row">
+          <span class="price-label">🤖 AI Suggested</span>
+          <span class="price-value price-ai">₹{{ "%.0f"|format(room.ai_price) }}</span>
+        </div>
+
+        <div class="price-row">
+          <span class="price-label">📌 Current Price</span>
+          <span class="price-value price-current">₹{{ "%.0f"|format(room.current_price) }}</span>
+        </div>
+
+        <div class="price-change">
+          <div class="change-direction {% if room.price_explanation.change_percent > 0 %}change-up{% else %}change-down{% endif %}">
+            {{ room.price_explanation.direction }}
+          </div>
+          <div class="change-reasons">
+            <strong>Why {{ room.price_explanation.direction.lower() }}:</strong>
+            <ul style="margin: 0.3rem 0; padding-left: 1.2rem;">
+              {% for reason in room.price_explanation.detailed_reasons %}
+              <li>{{ reason }}</li>
+              {% endfor %}
+            </ul>
+          </div>
+        </div>
+
+        <button class="btn-override" onclick="overridePrice('{{ room.room_id }}', '{{ room.room_type }}')">
+          ✎ Override Price
+        </button>
+      </div>
+      {% endfor %}
+    </div>
+
+  </div>
+</div>
+
+<script>
+function overridePrice(roomId, roomType) {
+  const newPrice = prompt(`Enter new price for ${roomType} (₹):`);
+  if (!newPrice || isNaN(newPrice) || parseFloat(newPrice) <= 0) {
+    alert('Please enter a valid price');
+    return;
+  }
+  
+  const reason = prompt('Reason for override (for audit logging):');
+  if (!reason) return;
+  
+  fetch(`/api/manager/pricing/${roomId}/override`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRFToken': document.querySelector('[name=csrf_token]')?.value || ''
+    },
+    body: JSON.stringify({ price: parseFloat(newPrice), reason })
+  })
+  .then(r => r.json())
+  .then(d => {
+    if (d.success) {
+      alert('✅ ' + d.message);
+      location.reload();
+    } else {
+      alert('❌ Error: ' + (d.error || 'Unknown error'));
+    }
+  })
+  .catch(e => alert('Request failed: ' + e.message));
+}
+</script>
+
+{% endblock %}
