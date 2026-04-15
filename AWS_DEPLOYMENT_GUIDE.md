@@ -39,8 +39,8 @@ ssh -i "your-key.pem" ubuntu@<EC2-PUBLIC-IP>
 sudo apt update && sudo apt install -y python3 python3-pip python3-venv git nginx
 
 # Clone your project
-git clone https://github.com/yourusername/blissful-abodes.git
-cd blissful-abodes
+git clone https://github.com/ajithkumar31082004-bit/final_year.git
+cd final_year
 
 # Setup virtual environment
 python3 -m venv .venv
