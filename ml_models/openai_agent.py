@@ -8,12 +8,25 @@ All three assistant roles (Guest Concierge, Manager, Staff) use Gemini.
 
 import os
 import json
+import warnings
 
 try:
-    import google.generativeai as genai
+    import google.genai as genai
     _GENAI_AVAILABLE = True
+    _GENAI_PACKAGE = "google.genai"
 except ImportError:
-    _GENAI_AVAILABLE = False
+    try:
+        import google.generativeai as genai
+        _GENAI_AVAILABLE = True
+        _GENAI_PACKAGE = "google.generativeai"
+        warnings.warn(
+            "google.generativeai is deprecated. Install google-genai and update imports to google.genai.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+    except ImportError:
+        _GENAI_AVAILABLE = False
+        _GENAI_PACKAGE = None
 
 from ml_models.external_apis import (
     StripeRadarAPI,

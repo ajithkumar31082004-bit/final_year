@@ -56,6 +56,26 @@ def get_db():
     return conn
 
 
+
+
+def _normalize_sql_for_mysql(sql: str) -> str:
+    """Convert SQLite-style schema DDL to MySQL-compatible DDL when needed."""
+    if not USE_MYSQL:
+        return sql
+    replacements = [
+        ('TEXT PRIMARY KEY', 'VARCHAR(128) PRIMARY KEY'),
+        ('TEXT UNIQUE NOT NULL', 'VARCHAR(255) UNIQUE NOT NULL'),
+        ('TEXT NOT NULL DEFAULT', 'VARCHAR(255) NOT NULL DEFAULT'),
+        ('TEXT DEFAULT CURRENT_TIMESTAMP', 'DATETIME DEFAULT CURRENT_TIMESTAMP'),
+        ('TEXT DEFAULT "', 'VARCHAR(255) DEFAULT "'),
+        ("TEXT DEFAULT '", "VARCHAR(255) DEFAULT '") ,
+        ('INTEGER PRIMARY KEY AUTOINCREMENT', 'INT PRIMARY KEY AUTO_INCREMENT'),
+    ]
+    for old, new in replacements:
+        sql = sql.replace(old, new)
+    return sql
+
+
 def _get_mysql_connection():
     """Create MySQL connection from DATABASE_URL or individual env vars"""
     try:
@@ -104,8 +124,8 @@ def init_db():
     cursor = conn.cursor()
 
     # Users table
-    cursor.execute(
-        """
+    cursor.execute(_normalize_sql_for_mysql(
+        """)
         CREATE TABLE IF NOT EXISTS users (
             user_id TEXT PRIMARY KEY,
             email TEXT UNIQUE NOT NULL,
@@ -131,11 +151,11 @@ def init_db():
             shift TEXT
         )
     """
-    )
+    ))
 
     # Rooms table
-    cursor.execute(
-        """
+    cursor.execute(_normalize_sql_for_mysql(
+        """)
         CREATE TABLE IF NOT EXISTS rooms (
             room_id TEXT PRIMARY KEY,
             room_number TEXT UNIQUE NOT NULL,
@@ -155,11 +175,11 @@ def init_db():
             created_at TEXT DEFAULT CURRENT_TIMESTAMP
         )
     """
-    )
+    ))
 
     # Bookings table
-    cursor.execute(
-        """
+    cursor.execute(_normalize_sql_for_mysql(
+        """)
         CREATE TABLE IF NOT EXISTS bookings (
             booking_id TEXT PRIMARY KEY,
             user_id TEXT NOT NULL,
@@ -194,7 +214,7 @@ def init_db():
             FOREIGN KEY (room_id) REFERENCES rooms(room_id)
         )
     """
-    )
+    ))
 
     # Lightweight schema migration for existing DBs
     try:
@@ -207,8 +227,8 @@ def init_db():
         pass
 
     # Reviews table
-    cursor.execute(
-        """
+    cursor.execute(_normalize_sql_for_mysql(
+        """)
         CREATE TABLE IF NOT EXISTS reviews (
             review_id TEXT PRIMARY KEY,
             booking_id TEXT,
@@ -234,11 +254,11 @@ def init_db():
             FOREIGN KEY (room_id) REFERENCES rooms(room_id)
         )
     """
-    )
+    ))
 
     # Loyalty transactions
-    cursor.execute(
-        """
+    cursor.execute(_normalize_sql_for_mysql(
+        """)
         CREATE TABLE IF NOT EXISTS loyalty_transactions (
             transaction_id TEXT PRIMARY KEY,
             user_id TEXT NOT NULL,
@@ -251,11 +271,11 @@ def init_db():
             FOREIGN KEY (user_id) REFERENCES users(user_id)
         )
     """
-    )
+    ))
 
     # Notifications
-    cursor.execute(
-        """
+    cursor.execute(_normalize_sql_for_mysql(
+        """)
         CREATE TABLE IF NOT EXISTS notifications (
             notification_id TEXT PRIMARY KEY,
             user_id TEXT NOT NULL,
@@ -268,11 +288,11 @@ def init_db():
             FOREIGN KEY (user_id) REFERENCES users(user_id)
         )
     """
-    )
+    ))
 
     # Coupons
-    cursor.execute(
-        """
+    cursor.execute(_normalize_sql_for_mysql(
+        """)
         CREATE TABLE IF NOT EXISTS coupons (
             coupon_id TEXT PRIMARY KEY,
             code TEXT UNIQUE NOT NULL,
@@ -288,11 +308,11 @@ def init_db():
             created_at TEXT DEFAULT CURRENT_TIMESTAMP
         )
     """
-    )
+    ))
 
     # Audit logs
-    cursor.execute(
-        """
+    cursor.execute(_normalize_sql_for_mysql(
+        """)
         CREATE TABLE IF NOT EXISTS audit_logs (
             log_id TEXT PRIMARY KEY,
             user_id TEXT,
@@ -304,11 +324,11 @@ def init_db():
             created_at TEXT DEFAULT CURRENT_TIMESTAMP
         )
     """
-    )
+    ))
 
     # Inventory
-    cursor.execute(
-        """
+    cursor.execute(_normalize_sql_for_mysql(
+        """)
         CREATE TABLE IF NOT EXISTS inventory (
             item_id TEXT PRIMARY KEY,
             name TEXT NOT NULL,
@@ -320,11 +340,11 @@ def init_db():
             last_updated TEXT DEFAULT CURRENT_TIMESTAMP
         )
     """
-    )
+    ))
 
     # Staff shifts
-    cursor.execute(
-        """
+    cursor.execute(_normalize_sql_for_mysql(
+        """)
         CREATE TABLE IF NOT EXISTS staff_shifts (
             shift_id TEXT PRIMARY KEY,
             staff_id TEXT NOT NULL,
@@ -338,11 +358,11 @@ def init_db():
             FOREIGN KEY (staff_id) REFERENCES users(user_id)
         )
     """
-    )
+    ))
 
     # Housekeeping tasks
-    cursor.execute(
-        """
+    cursor.execute(_normalize_sql_for_mysql(
+        """)
         CREATE TABLE IF NOT EXISTS housekeeping_tasks (
             task_id TEXT PRIMARY KEY,
             room_id TEXT NOT NULL,
@@ -358,11 +378,11 @@ def init_db():
             FOREIGN KEY (room_id) REFERENCES rooms(room_id)
         )
     """
-    )
+    ))
 
     # Maintenance issues
-    cursor.execute(
-        """
+    cursor.execute(_normalize_sql_for_mysql(
+        """)
         CREATE TABLE IF NOT EXISTS maintenance_issues (
             issue_id TEXT PRIMARY KEY,
             room_id TEXT,
@@ -378,11 +398,11 @@ def init_db():
             FOREIGN KEY (room_id) REFERENCES rooms(room_id)
         )
     """
-    )
+    ))
 
     # Wishlists
-    cursor.execute(
-        """
+    cursor.execute(_normalize_sql_for_mysql(
+        """)
         CREATE TABLE IF NOT EXISTS wishlists (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id TEXT NOT NULL,
@@ -393,11 +413,11 @@ def init_db():
             FOREIGN KEY (room_id) REFERENCES rooms(room_id)
         )
     """
-    )
+    ))
 
     # Messages (internal staff)
-    cursor.execute(
-        """
+    cursor.execute(_normalize_sql_for_mysql(
+        """)
         CREATE TABLE IF NOT EXISTS messages (
             message_id TEXT PRIMARY KEY,
             sender_id TEXT NOT NULL,
@@ -407,11 +427,11 @@ def init_db():
             created_at TEXT DEFAULT CURRENT_TIMESTAMP
         )
     """
-    )
+    ))
 
     # Chatbot messages
-    cursor.execute(
-        """
+    cursor.execute(_normalize_sql_for_mysql(
+        """)
         CREATE TABLE IF NOT EXISTS chatbot_messages (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id TEXT NOT NULL,
@@ -420,11 +440,11 @@ def init_db():
             created_at TEXT DEFAULT CURRENT_TIMESTAMP
         )
     """
-    )
+    ))
 
     # Service requests (general + room service)
-    cursor.execute(
-        """
+    cursor.execute(_normalize_sql_for_mysql(
+        """)
         CREATE TABLE IF NOT EXISTS service_requests (
             request_id TEXT PRIMARY KEY,
             user_id TEXT NOT NULL,
@@ -437,7 +457,7 @@ def init_db():
             updated_at TEXT DEFAULT CURRENT_TIMESTAMP
         )
     """
-    )
+    ))
 
     # Indexes for hot queries
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)")
