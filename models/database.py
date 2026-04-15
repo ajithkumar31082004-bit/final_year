@@ -125,7 +125,7 @@ def init_db():
 
     # Users table
     cursor.execute(_normalize_sql_for_mysql(
-        """)
+        """
         CREATE TABLE IF NOT EXISTS users (
             user_id TEXT PRIMARY KEY,
             email TEXT UNIQUE NOT NULL,
@@ -155,7 +155,7 @@ def init_db():
 
     # Rooms table
     cursor.execute(_normalize_sql_for_mysql(
-        """)
+        """
         CREATE TABLE IF NOT EXISTS rooms (
             room_id TEXT PRIMARY KEY,
             room_number TEXT UNIQUE NOT NULL,
@@ -179,7 +179,7 @@ def init_db():
 
     # Bookings table
     cursor.execute(_normalize_sql_for_mysql(
-        """)
+        """
         CREATE TABLE IF NOT EXISTS bookings (
             booking_id TEXT PRIMARY KEY,
             user_id TEXT NOT NULL,
@@ -228,7 +228,7 @@ def init_db():
 
     # Reviews table
     cursor.execute(_normalize_sql_for_mysql(
-        """)
+        """
         CREATE TABLE IF NOT EXISTS reviews (
             review_id TEXT PRIMARY KEY,
             booking_id TEXT,
@@ -258,7 +258,7 @@ def init_db():
 
     # Loyalty transactions
     cursor.execute(_normalize_sql_for_mysql(
-        """)
+        """
         CREATE TABLE IF NOT EXISTS loyalty_transactions (
             transaction_id TEXT PRIMARY KEY,
             user_id TEXT NOT NULL,
@@ -275,7 +275,7 @@ def init_db():
 
     # Notifications
     cursor.execute(_normalize_sql_for_mysql(
-        """)
+        """
         CREATE TABLE IF NOT EXISTS notifications (
             notification_id TEXT PRIMARY KEY,
             user_id TEXT NOT NULL,
@@ -292,7 +292,7 @@ def init_db():
 
     # Coupons
     cursor.execute(_normalize_sql_for_mysql(
-        """)
+        """
         CREATE TABLE IF NOT EXISTS coupons (
             coupon_id TEXT PRIMARY KEY,
             code TEXT UNIQUE NOT NULL,
@@ -312,7 +312,7 @@ def init_db():
 
     # Audit logs
     cursor.execute(_normalize_sql_for_mysql(
-        """)
+        """
         CREATE TABLE IF NOT EXISTS audit_logs (
             log_id TEXT PRIMARY KEY,
             user_id TEXT,
@@ -328,7 +328,7 @@ def init_db():
 
     # Inventory
     cursor.execute(_normalize_sql_for_mysql(
-        """)
+        """
         CREATE TABLE IF NOT EXISTS inventory (
             item_id TEXT PRIMARY KEY,
             name TEXT NOT NULL,
@@ -344,7 +344,7 @@ def init_db():
 
     # Staff shifts
     cursor.execute(_normalize_sql_for_mysql(
-        """)
+        """
         CREATE TABLE IF NOT EXISTS staff_shifts (
             shift_id TEXT PRIMARY KEY,
             staff_id TEXT NOT NULL,
@@ -362,7 +362,7 @@ def init_db():
 
     # Housekeeping tasks
     cursor.execute(_normalize_sql_for_mysql(
-        """)
+        """
         CREATE TABLE IF NOT EXISTS housekeeping_tasks (
             task_id TEXT PRIMARY KEY,
             room_id TEXT NOT NULL,
@@ -382,7 +382,7 @@ def init_db():
 
     # Maintenance issues
     cursor.execute(_normalize_sql_for_mysql(
-        """)
+        """
         CREATE TABLE IF NOT EXISTS maintenance_issues (
             issue_id TEXT PRIMARY KEY,
             room_id TEXT,
@@ -402,7 +402,7 @@ def init_db():
 
     # Wishlists
     cursor.execute(_normalize_sql_for_mysql(
-        """)
+        """
         CREATE TABLE IF NOT EXISTS wishlists (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id TEXT NOT NULL,
@@ -417,7 +417,7 @@ def init_db():
 
     # Messages (internal staff)
     cursor.execute(_normalize_sql_for_mysql(
-        """)
+        """
         CREATE TABLE IF NOT EXISTS messages (
             message_id TEXT PRIMARY KEY,
             sender_id TEXT NOT NULL,
@@ -431,7 +431,7 @@ def init_db():
 
     # Chatbot messages
     cursor.execute(_normalize_sql_for_mysql(
-        """)
+        """
         CREATE TABLE IF NOT EXISTS chatbot_messages (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id TEXT NOT NULL,
@@ -444,7 +444,7 @@ def init_db():
 
     # Service requests (general + room service)
     cursor.execute(_normalize_sql_for_mysql(
-        """)
+        """
         CREATE TABLE IF NOT EXISTS service_requests (
             request_id TEXT PRIMARY KEY,
             user_id TEXT NOT NULL,
