@@ -1,6 +1,6 @@
 # AWS Cloud Deployment Guide: Blissful Abodes
 
-This guide provides the exact terminal commands and steps needed to deploy your AI-powered Hotel Management System to your production AWS EC2 instance (`13.206.110.152`).
+This guide provides the exact terminal commands and steps needed to deploy your AI-powered Hotel Management System to your production AWS EC2 instance (`3.110.213.232`).
 
 ## 🏗️ Architecture Overview
 * **Compute:** AWS EC2 (Ubuntu 22.04 LTS)
@@ -19,7 +19,7 @@ Open your local terminal and connect to your AWS EC2 instance using your `.pem` 
 chmod 400 your-aws-key.pem
 
 # SSH into the server
-ssh -i "your-aws-key.pem" ubuntu@13.206.110.152
+ssh -i "final.pem" ubuntu@3.110.213.232
 ```
 
 ## Step 2: System Setup & Dependencies
@@ -97,7 +97,7 @@ sudo nano /etc/nginx/sites-available/blissful
 ```nginx
 server {
     listen 80;
-    server_name 13.206.110.152; # Or your domain name (e.g., www.blissfulabodes.com)
+    server_name 3.110.213.232; # Or your domain name (e.g., www.blissfulabodes.com)
 
     location / {
         include proxy_params;
@@ -130,7 +130,7 @@ sudo ufw enable
 ---
 
 🎉 **Congratulations!** Your project is now securely deployed on the AWS Cloud.
-You can access your live application by visiting: **http://13.206.110.152**
+You can access your live application by visiting: **http://3.110.213.232**
 
 ### Troubleshooting / Logs
 If anything goes wrong, you can check your live logs using these commands:
