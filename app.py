@@ -358,7 +358,8 @@ def create_app(config_name="default"):
             )
 
             base = result["final_price"] * nights
-            gst = base * 0.18
+            gst_rate = 0.18 if result["final_price"] >= 7500 else 0.12
+            gst = base * gst_rate
 
             return jsonify(
                 {
@@ -367,7 +368,7 @@ def create_app(config_name="default"):
                     "nights": nights,
                     "base_amount": base,
                     "gst": gst,
-                    "gst_rate": "18%",
+                    "gst_rate": f"{int(gst_rate*100)}%",
                     "total": base + gst,
                     "rules_applied": result["rules_applied"],
                     "multiplier": result["multiplier"],
@@ -375,6 +376,49 @@ def create_app(config_name="default"):
             )
         except Exception as e:
             return jsonify({"error": str(e)})
+
+    @app.route("/api/validate-coupon", methods=["POST"])
+    def validate_coupon():
+        data = request.json
+        code = data.get("code", "")
+        amount = data.get("amount", 0)
+        if not code:
+            return jsonify({"valid": False, "message": "No code provided"})
+        
+        from models.database import get_db
+        conn = get_db()
+        coupon = conn.execute("SELECT * FROM coupons WHERE code = ? AND is_active = 1", (code,)).fetchone()
+        conn.close()
+        
+        if not coupon:
+            return jsonify({"valid": False, "message": "Invalid coupon code"})
+        
+        c = dict(coupon)
+        if c.get("min_booking_amount", 0) > amount:
+            return jsonify({"valid": False, "message": f"Minimum booking amount is INR {c['min_booking_amount']}"})
+        
+        if c.get("used_count", 0) >= c.get("max_uses", 999999):
+            return jsonify({"valid": False, "message": "Coupon usage limit exceeded"})
+            
+        if c.get("valid_until"):
+            try:
+                vu = datetime.strptime(c["valid_until"], "%Y-%m-%d").date()
+                if datetime.now().date() > vu:
+                    return jsonify({"valid": False, "message": "Coupon expired"})
+            except: pass
+            
+        discount = 0
+        if c["discount_type"] == "percentage":
+            discount = amount * (c["discount_value"] / 100.0)
+        else:
+            discount = c["discount_value"]
+            
+        return jsonify({
+            "valid": True,
+            "message": f"Coupon applied! You save INR {discount:,.0f}",
+            "discount_amount": discount
+        })
+
 
     @app.route("/api/notifications/<user_id>")
     def api_notifications(user_id):

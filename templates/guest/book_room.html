@@ -98,7 +98,7 @@
                                                 <div style="display:flex;justify-content:space-between;padding:0.5rem 0;border-bottom:1px solid rgba(0,0,0,0.06);"><span id="perNightLabel">Per night</span><span id="perNight" style="font-weight:600;"></span></div>
                                                 <div style="display:flex;justify-content:space-between;padding:0.5rem 0;border-bottom:1px solid rgba(0,0,0,0.06);"><span>× <span id="nights">0</span> nights</span><span id="baseAmount"></span></div>
                         <div id="discountRow" style="display:none;color:var(--success);justify-content:space-between;padding:0.5rem 0;border-bottom:1px solid rgba(0,0,0,0.06);"><span>- Discount</span><span id="discountAmt"></span></div>
-                        <div style="display:flex;justify-content:space-between;padding:0.5rem 0;border-bottom:1px solid rgba(0,0,0,0.06);color:var(--text-light);"><span>+ GST (18%)</span><span id="gstAmt"></span></div>
+                        <div style="display:flex;justify-content:space-between;padding:0.5rem 0;border-bottom:1px solid rgba(0,0,0,0.06);color:var(--text-light);"><span id="gstLabel">+ GST</span><span id="gstAmt"></span></div>
                         <div style="display:flex;justify-content:space-between;padding:0.875rem 0;font-size:1.25rem;font-weight:700;color:var(--primary);"><span>Total</span><span id="totalAmt"></span></div>
                         <div style="font-size:0.75rem;color:var(--text-muted);text-align:center;margin-top:0.25rem;">Pricing updates based on availability and dates</div>
                     </div>
@@ -130,13 +130,18 @@ function renderPrice(data) {
     const loyaltyDiscount = Math.max(0, loyaltyPts / 10);
     const totalDiscount = Math.max(0, discountAmount + loyaltyDiscount);
 
+    const perNight = Number(data.per_night || 0);
+    const gstRate = perNight >= 7500 ? 0.18 : 0.12;
+
     const taxable = Math.max(0, data.base_amount - totalDiscount);
-    const gst = taxable * 0.18;
+    const gst = taxable * gstRate;
     const total = taxable + gst;
 
-    const perNight = Number(data.per_night || 0);
     const perNightLabel = document.getElementById('perNightLabel');
     if (perNightLabel) perNightLabel.textContent = 'Per night';
+
+    const gstLabel = document.getElementById('gstLabel');
+    if (gstLabel) gstLabel.textContent = `+ GST (${gstRate * 100}%)`;
 
     document.getElementById('perNight').textContent = 'INR ' + perNight.toLocaleString('en-IN');
     document.getElementById('nights').textContent = data.nights;

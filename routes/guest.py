@@ -131,9 +131,47 @@ def book_room(room_id):
             return redirect(url_for("guest.book_room", room_id=room_id))
 
         nights = (co - ci).days
-        base_amount = room_dict["current_price"] * nights
-        gst_amount = base_amount * 0.18
-        total_amount = base_amount + gst_amount
+        
+        # Calculate dynamic price
+        from ml_models.models import get_pricing_engine
+        occupancy_rate = 0.5
+        try:
+            conn = get_db()
+            occ = conn.execute("SELECT COUNT(*) FROM rooms WHERE status IN ('occupied','reserved')").fetchone()[0]
+            total = conn.execute("SELECT COUNT(*) FROM rooms WHERE is_active=1").fetchone()[0] or 1
+            occupancy_rate = occ / max(total, 1)
+            conn.close()
+        except:
+            pass
+            
+        pricing = get_pricing_engine()
+        days_until = max(0, (ci - datetime.now().date()).days)
+        result = pricing.calculate_price(room_dict["room_type"], check_in, occupancy_rate * 100, days_until, base_price=room_dict["current_price"])
+        
+        base_amount = result["final_price"] * nights
+        
+        # Apply discounts
+        coupon_code = request.form.get("coupon_code", "").strip()
+        loyalty_points = safe_int(request.form.get("loyalty_points", 0), 0)
+        
+        discount_amount = 0
+        if coupon_code:
+            conn = get_db()
+            coupon = conn.execute("SELECT * FROM coupons WHERE code = ? AND is_active = 1", (coupon_code,)).fetchone()
+            conn.close()
+            if coupon and base_amount >= coupon["min_booking_amount"]:
+                if coupon["discount_type"] == "percentage":
+                    discount_amount += base_amount * (coupon["discount_value"] / 100.0)
+                else:
+                    discount_amount += coupon["discount_value"]
+                    
+        loyalty_discount = loyalty_points / 10.0
+        discount_amount += loyalty_discount
+        
+        taxable_amount = max(0, base_amount - discount_amount)
+        gst_rate = 0.18 if result["final_price"] >= 7500 else 0.12
+        gst_amount = taxable_amount * gst_rate
+        total_amount = taxable_amount + gst_amount
 
         # Create booking
         booking_id = f"BK{datetime.now().strftime('%Y%m%d%H%M%S')}{uuid.uuid4().hex[:6].upper()}"
@@ -141,10 +179,10 @@ def book_room(room_id):
         conn.execute(
             """INSERT INTO bookings
                (booking_id, user_id, room_id, room_number, check_in, check_out, num_guests,
-                base_amount, gst_amount, total_amount, status, payment_status, created_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                base_amount, gst_amount, discount_amount, total_amount, coupon_code, loyalty_points_used, status, payment_status, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (booking_id, user["user_id"], room_id, room_dict.get("room_number", ""), check_in, check_out,
-             num_guests, base_amount, gst_amount, total_amount, "pending", "pending", datetime.now().isoformat())
+             num_guests, base_amount, gst_amount, discount_amount, total_amount, coupon_code, loyalty_points, "pending", "pending", datetime.now().isoformat())
         )
         conn.commit()
         conn.close()
