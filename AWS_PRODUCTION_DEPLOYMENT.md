@@ -1,6 +1,6 @@
 # AWS Cloud Deployment Guide: Blissful Abodes
 
-This guide provides the exact terminal commands and steps needed to deploy your AI-powered Hotel Management System to your production AWS EC2 instance (`3.110.213.232`).
+This guide provides the exact terminal commands and steps needed to deploy your AI-powered Hotel Management System to your production AWS EC2 instance (`13.126.1.26`).
 
 ## 🏗️ Architecture Overview
 * **Compute:** AWS EC2 (Ubuntu 22.04 LTS)
@@ -16,10 +16,10 @@ Open your local terminal and connect to your AWS EC2 instance using your `.pem` 
 
 ```bash
 # Set secure permissions for your key
-chmod 400 your-aws-key.pem
+chmod 400 final.pem
 
 # SSH into the server
-ssh -i "final.pem" ubuntu@3.110.213.232
+ssh -i "final.pem" ubuntu@15.206.74.64 
 ```
 
 ## Step 2: System Setup & Dependencies
@@ -33,8 +33,8 @@ sudo apt install -y python3-pip python3-venv python3-dev nginx git libtiff5-dev 
 ## Step 3: Clone Project & Setup Python Environment
 ```bash
 # Clone the repository (replace with your actual git URL)
-git clone https://github.com/your-username/blissful-abodes.git
-cd blissful-abodes
+git clone https://github.com/ajithkumar31082004-bit/final_year.git
+cd final_year
 
 # Create and activate virtual environment
 python3 -m venv .venv
@@ -70,10 +70,10 @@ After=network.target
 [Service]
 User=ubuntu
 Group=www-data
-WorkingDirectory=/home/ubuntu/blissful-abodes
-Environment="PATH=/home/ubuntu/blissful-abodes/.venv/bin"
-EnvironmentFile=/home/ubuntu/blissful-abodes/.env
-ExecStart=/home/ubuntu/blissful-abodes/.venv/bin/gunicorn --workers 4 --threads 2 --bind unix:blissful.sock -m 007 app:app
+WorkingDirectory=/home/ubuntu/final_year
+Environment="PATH=/home/ubuntu/final_year/.venv/bin"
+EnvironmentFile=/home/ubuntu/final_year/.env
+ExecStart=/home/ubuntu/final_year/.venv/bin/gunicorn --workers 1 --threads 4 --bind unix:blissful.sock -m 007 app:app
 
 [Install]
 WantedBy=multi-user.target
@@ -97,15 +97,15 @@ sudo nano /etc/nginx/sites-available/blissful
 ```nginx
 server {
     listen 80;
-    server_name 3.110.213.232; # Or your domain name (e.g., www.blissfulabodes.com)
+    server_name 13.206.79.32; # Or your domain name (e.g., www.blissfulabodes.com)
 
     location / {
         include proxy_params;
-        proxy_pass http://unix:/home/ubuntu/blissful-abodes/blissful.sock;
+        proxy_pass http://unix:/home/ubuntu/final_year/blissful.sock;
     }
 
     location /static {
-        alias /home/ubuntu/blissful-abodes/static;
+        alias /home/ubuntu/final_year/static;
         expires 30d;
     }
 }
@@ -130,7 +130,7 @@ sudo ufw enable
 ---
 
 🎉 **Congratulations!** Your project is now securely deployed on the AWS Cloud.
-You can access your live application by visiting: **http://3.110.213.232**
+You can access your live application by visiting: **http://13.206.79.32**
 
 ### Troubleshooting / Logs
 If anything goes wrong, you can check your live logs using these commands:

@@ -74,7 +74,7 @@ Fraud Score  : {fraud_score:.2f} / 1.00
 Risk Reason  : {reason}
 
 ⚠️ ACTION REQUIRED: Review this booking in the Admin Dashboard immediately.
-Dashboard: http://3.110.213.232:5000/admin/bookings
+Dashboard: http://13.126.1.26:5000/admin/bookings
 """
         )
         print(f"[SNS] Fraud alert sent for {booking_id}")

@@ -408,6 +408,13 @@ def create_app(config_name="default"):
         return render_template("errors/500.html"), 500
 
     # Background scheduler
+    # Guard: only run in ONE process. With gunicorn --preload, this runs in
+    # the master before forking. Without --preload, skip in worker processes.
+    _is_gunicorn_worker = "gunicorn" in os.environ.get("SERVER_SOFTWARE", "").lower()
+    _is_werkzeug_reloader = os.environ.get("WERKZEUG_RUN_MAIN") == "true"
+    _run_scheduler = (not _is_gunicorn_worker) or _is_werkzeug_reloader or os.environ.get("RUN_MAIN", "") == "true"
+    # When using --preload with gunicorn, the app is created before forking,
+    # so we can always start the scheduler here safely.
     try:
         from apscheduler.schedulers.background import BackgroundScheduler
 
