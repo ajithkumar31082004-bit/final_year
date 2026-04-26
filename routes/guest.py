@@ -560,8 +560,7 @@ def cancel_booking(booking_id):
     """Cancel a booking"""
     user = get_current_user()
     if not user:
-        flash("Please login to continue.", "warning")
-        return redirect(url_for("auth.login"))
+        return jsonify({"success": False, "message": "Please login to continue."})
 
     conn = get_db()
     booking = conn.execute(
@@ -571,13 +570,11 @@ def cancel_booking(booking_id):
 
     if not booking:
         conn.close()
-        flash("Booking not found.", "danger")
-        return redirect(url_for("guest.my_bookings"))
+        return jsonify({"success": False, "message": "Booking not found."})
 
     if booking["status"] in ["cancelled", "completed"]:
         conn.close()
-        flash("Cannot cancel this booking.", "danger")
-        return redirect(url_for("guest.my_bookings"))
+        return jsonify({"success": False, "message": "Cannot cancel this booking."})
 
     # Calculate refund
     check_in = datetime.strptime(booking["check_in"], "%Y-%m-%d")
@@ -611,8 +608,7 @@ def cancel_booking(booking_id):
     except Exception as e:
         current_app.logger.error(f"Failed to send cancellation email: {e}")
 
-    flash(f"Booking cancelled. Refund amount: INR {refund_amount:,.2f}", "success")
-    return redirect(url_for("guest.my_bookings"))
+    return jsonify({"success": True, "refund": refund_amount, "refund_pct": int(refund_pct * 100)})
 
 
 @guest_bp.route("/dashboard")

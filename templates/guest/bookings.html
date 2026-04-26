@@ -1,4 +1,4 @@
-﻿{% extends "base.html" %}
+{% extends "base.html" %}
 {% block title %}My Bookings - Blissful Abodes{% endblock %}
 {% block content %}
 <div class="dashboard-layout">
@@ -66,7 +66,7 @@
 <script>
 function cancelBooking(id) {
     if (!confirm('Cancel this booking? Refund will be processed per cancellation policy.')) return;
-    fetch(`/guest/cancel-booking/${id}`, {method:'POST'})
+    fetch(`/cancel-booking/${id}`, {method:'POST'})
         .then(r => r.json()).then(d => {
             if (d.success) { showToast(`Booking cancelled. Refund: INR ${d.refund.toFixed(0)} (${d.refund_pct}%)`); location.reload(); }
             else showToast(d.message);
