@@ -1,0 +1,2708 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Case Study: Blissful Abodes | Senior Cloud & DevOps Portfolio</title>
+    <meta name="description" content="Detailed cloud architecture and DevOps case study of Blissful Abodes, a production-grade AI-powered hotel management system hosted on AWS.">
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        /* ==========================================================================
+           1. DESIGN SYSTEM & ROOT VARIABLES
+           ========================================================================== */
+        :root {
+            --bg-dark: #070913;
+            --bg-card: rgba(17, 24, 39, 0.45);
+            --bg-card-hover: rgba(30, 41, 59, 0.65);
+            --border-glass: rgba(255, 255, 255, 0.08);
+            --border-glass-hover: rgba(255, 153, 0, 0.3);
+            
+            /* AWS Color Palette */
+            --aws-orange: #ff9900;
+            --aws-orange-glow: rgba(255, 153, 0, 0.15);
+            --aws-blue: #00a1ec;
+            --aws-navy: #232f3e;
+            --aws-squid-ink: #111729;
+            
+            /* UI Colors */
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            --success: #10b981;
+            --danger: #ef4444;
+            --purple: #a855f7;
+            
+            --font-main: 'Plus Jakarta Sans', sans-serif;
+            --font-mono: 'JetBrains Mono', monospace;
+            --shadow-glow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+            --shadow-orange: 0 0 25px rgba(255, 153, 0, 0.2);
+            --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /* ==========================================================================
+           2. RESET & BASE STYLES
+           ========================================================================== */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            background-color: var(--bg-dark);
+            background-image: 
+                radial-gradient(circle at 10% 20%, rgba(255, 153, 0, 0.04) 0%, transparent 40%),
+                radial-gradient(circle at 80% 80%, rgba(0, 161, 236, 0.04) 0%, transparent 40%);
+            background-attachment: fixed;
+            color: var(--text-primary);
+            font-family: var(--font-main);
+            line-height: 1.6;
+            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        a {
+            color: inherit;
+            text-decoration: none;
+            transition: var(--transition-smooth);
+        }
+
+        /* Common Container Layout */
+        .container {
+            width: 100%;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 1.5rem;
+        }
+
+        /* Section Layouts */
+        section {
+            padding: 5rem 0;
+            position: relative;
+        }
+
+        /* Glassmorphism Card Style */
+        .glass-card {
+            background: var(--bg-card);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--border-glass);
+            border-radius: 16px;
+            box-shadow: var(--shadow-glow);
+            transition: var(--transition-smooth);
+        }
+
+        .glass-card:hover {
+            border-color: var(--border-glass-hover);
+            transform: translateY(-4px);
+            box-shadow: 0 12px 40px 0 rgba(255, 153, 0, 0.08);
+        }
+
+        /* Section Titles */
+        .section-header {
+            margin-bottom: 3.5rem;
+            text-align: center;
+        }
+
+        .section-tag {
+            display: inline-block;
+            padding: 0.4rem 1rem;
+            background: rgba(255, 153, 0, 0.1);
+            border: 1px solid rgba(255, 153, 0, 0.2);
+            color: var(--aws-orange);
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-bottom: 1rem;
+        }
+
+        .section-title {
+            font-size: 2.25rem;
+            font-weight: 800;
+            letter-spacing: -0.025em;
+            background: linear-gradient(135deg, #fff 30%, #cbd5e1 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        /* Badge Style */
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: var(--text-primary);
+        }
+
+        .badge-aws {
+            background: rgba(255, 153, 0, 0.1);
+            border: 1px solid rgba(255, 153, 0, 0.3);
+            color: var(--aws-orange);
+        }
+
+        .badge-blue {
+            background: rgba(0, 161, 236, 0.1);
+            border: 1px solid rgba(0, 161, 236, 0.3);
+            color: var(--aws-blue);
+        }
+
+        /* Scroll Animations Utility */
+        .reveal {
+            opacity: 0;
+            transform: translateY(30px);
+            transition: opacity 0.8s ease, transform 0.8s cubic-bezier(0.25, 1, 0.5, 1);
+        }
+
+        .reveal.active {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        /* ==========================================================================
+           3. NAVBAR
+           ========================================================================== */
+        .header-nav {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1000;
+            background: rgba(7, 9, 19, 0.7);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border-bottom: 1px solid var(--border-glass);
+            padding: 1rem 0;
+        }
+
+        .nav-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .nav-logo {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            font-size: 1.25rem;
+            font-weight: 800;
+            letter-spacing: -0.02em;
+        }
+
+        .logo-accent {
+            color: var(--aws-orange);
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 1.5rem;
+            list-style: none;
+            align-items: center;
+        }
+
+        .nav-link-item {
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+
+        .nav-link-item:hover, .nav-link-item.active {
+            color: var(--text-primary);
+        }
+
+        .btn-header {
+            background: var(--aws-orange);
+            color: #000;
+            padding: 0.5rem 1.25rem;
+            border-radius: 8px;
+            font-size: 0.875rem;
+            font-weight: 700;
+            box-shadow: 0 4px 14px rgba(255, 153, 0, 0.3);
+        }
+
+        .btn-header:hover {
+            background: #ffaa22;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(255, 153, 0, 0.4);
+        }
+
+        /* ==========================================================================
+           4. HERO & METADATA SECTION
+           ========================================================================== */
+        .hero-section {
+            padding-top: 9rem;
+            padding-bottom: 4rem;
+            overflow: hidden;
+        }
+
+        .hero-grid {
+            display: grid;
+            grid-template-columns: 1.2fr 0.8fr;
+            gap: 3.5rem;
+            align-items: center;
+        }
+
+        .hero-content {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+        .hero-pretitle {
+            color: var(--aws-orange);
+            font-weight: 800;
+            text-transform: uppercase;
+            font-size: 0.875rem;
+            letter-spacing: 0.15em;
+            margin-bottom: 0.75rem;
+        }
+
+        .hero-title {
+            font-size: 3rem;
+            font-weight: 850;
+            line-height: 1.15;
+            letter-spacing: -0.03em;
+            margin-bottom: 1.5rem;
+            background: linear-gradient(135deg, #ffffff 40%, #94a3b8 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .hero-desc {
+            font-size: 1.125rem;
+            color: var(--text-secondary);
+            margin-bottom: 2rem;
+            max-width: 600px;
+        }
+
+        .hero-action-buttons {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 2.5rem;
+        }
+
+        .btn-primary {
+            background: var(--aws-orange);
+            color: #000;
+            padding: 0.8rem 1.8rem;
+            border-radius: 8px;
+            font-weight: 700;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            box-shadow: var(--shadow-orange);
+        }
+
+        .btn-primary:hover {
+            background: #ffab24;
+            transform: translateY(-2px);
+            box-shadow: 0 8px 30px rgba(255, 153, 0, 0.4);
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: var(--text-primary);
+            padding: 0.8rem 1.8rem;
+            border-radius: 8px;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: rgba(255, 255, 255, 0.2);
+            transform: translateY(-2px);
+        }
+
+        .tech-badges-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.6rem;
+        }
+
+        /* Project Card Specs */
+        .meta-card {
+            padding: 2rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .meta-title {
+            font-size: 1.125rem;
+            font-weight: 700;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            padding-bottom: 0.75rem;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .meta-title i {
+            color: var(--aws-orange);
+        }
+
+        .meta-list {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            list-style: none;
+        }
+
+        .meta-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.875rem;
+        }
+
+        .meta-label {
+            color: var(--text-muted);
+            font-weight: 500;
+        }
+
+        .meta-val {
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .meta-val.status-completed {
+            color: var(--success);
+            background: rgba(16, 185, 129, 0.15);
+            padding: 0.15rem 0.6rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+        }
+
+        /* Banner Graphics Overlay */
+        .banner-mockup {
+            position: relative;
+            width: 100%;
+            height: 250px;
+            border-radius: 16px;
+            overflow: hidden;
+            margin-bottom: 2rem;
+            border: 1px solid var(--border-glass);
+            background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            box-shadow: var(--shadow-glow);
+        }
+
+        .banner-grid-overlay {
+            position: absolute;
+            inset: 0;
+            background-image: 
+                linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+
+        .banner-glow {
+            position: absolute;
+            width: 150px;
+            height: 150px;
+            background: var(--aws-orange);
+            filter: blur(100px);
+            opacity: 0.25;
+            border-radius: 50%;
+        }
+
+        .banner-content-inner {
+            position: relative;
+            z-index: 2;
+            text-align: center;
+        }
+
+        .banner-logo {
+            font-size: 3.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .banner-text {
+            font-weight: 700;
+            font-size: 1.25rem;
+            letter-spacing: 0.05em;
+            color: var(--aws-orange);
+        }
+
+        /* ==========================================================================
+           5. OVERVIEW & PROBLEM & SOLUTION
+           ========================================================================== */
+        .case-details-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2.5rem;
+        }
+
+        .detail-card {
+            padding: 2.5rem;
+        }
+
+        .detail-card h3 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: 1.25rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .detail-card h3 i {
+            color: var(--aws-orange);
+        }
+
+        .detail-card p {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+            line-height: 1.7;
+            margin-bottom: 1.25rem;
+        }
+
+        .detail-card ul {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 0.8rem;
+        }
+
+        .detail-card li {
+            position: relative;
+            padding-left: 1.75rem;
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+        }
+
+        .detail-card li::before {
+            content: "\f00c";
+            font-family: "Font Awesome 6 Free";
+            font-weight: 900;
+            position: absolute;
+            left: 0;
+            top: 2px;
+            color: var(--success);
+            font-size: 0.85rem;
+        }
+
+        .detail-card.problem-card li::before {
+            content: "\f00d";
+            color: var(--danger);
+        }
+
+        /* Solution card spans full width */
+        .solution-section {
+            margin-top: 2.5rem;
+        }
+
+        .solution-card-inner {
+            padding: 3rem;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 3.5rem;
+            align-items: center;
+        }
+
+        .solution-features-list {
+            display: flex;
+            flex-direction: column;
+            gap: 1.25rem;
+        }
+
+        .solution-feature-item {
+            display: flex;
+            gap: 1rem;
+        }
+
+        .sol-icon-box {
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
+            background: rgba(0, 161, 236, 0.1);
+            border: 1px solid rgba(0, 161, 236, 0.2);
+            color: var(--aws-blue);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-shrink: 0;
+        }
+
+        .sol-text-box h4 {
+            font-size: 1.05rem;
+            font-weight: 700;
+            margin-bottom: 0.25rem;
+        }
+
+        .sol-text-box p {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+
+        /* ==========================================================================
+           6. ARCHITECTURE DIAGRAM SECTION
+           ========================================================================== */
+        .architecture-wrapper {
+            padding: 2.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+        }
+
+        .arch-interactive-svg {
+            width: 100%;
+            max-height: 520px;
+            background: rgba(15, 23, 42, 0.2);
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            padding: 1rem;
+        }
+
+        .arch-node {
+            cursor: pointer;
+            transition: filter 0.3s ease;
+        }
+
+        .arch-node:hover {
+            filter: drop-shadow(0px 0px 8px var(--aws-orange));
+        }
+
+        .arch-link {
+            stroke-dasharray: 6;
+            animation: dash 12s linear infinite;
+        }
+
+        @keyframes dash {
+            to {
+                stroke-dashoffset: -100;
+            }
+        }
+
+        .arch-details-panel {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            padding: 1.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .arch-details-title {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: var(--aws-orange);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .arch-details-text {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        /* ==========================================================================
+           7. FEATURES SECTION
+           ========================================================================== */
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .feature-card {
+            padding: 2rem;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 1rem;
+        }
+
+        .feature-icon-wrapper {
+            width: 48px;
+            height: 48px;
+            border-radius: 10px;
+            background: rgba(255, 153, 0, 0.08);
+            border: 1px solid rgba(255, 153, 0, 0.2);
+            color: var(--aws-orange);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 1.25rem;
+            transition: var(--transition-smooth);
+        }
+
+        .feature-card:hover .feature-icon-wrapper {
+            background: var(--aws-orange);
+            color: #000;
+            box-shadow: 0 0 15px rgba(255, 153, 0, 0.3);
+            transform: scale(1.05);
+        }
+
+        .feature-card-title {
+            font-size: 1.125rem;
+            font-weight: 700;
+        }
+
+        .feature-card-desc {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            line-height: 1.6;
+        }
+
+        /* ==========================================================================
+           8. TECH STACK SECTION
+           ========================================================================== */
+        .tech-stack-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 2rem;
+        }
+
+        .tech-group-card {
+            padding: 2rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1.25rem;
+        }
+
+        .tech-group-title {
+            font-size: 1.15rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            padding-bottom: 0.75rem;
+        }
+
+        .tech-group-title i {
+            color: var(--aws-orange);
+        }
+
+        .tech-items-flex {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.6rem;
+        }
+
+        /* ==========================================================================
+           9. AWS SERVICES USED SECTION
+           ========================================================================== */
+        .aws-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+            gap: 2rem;
+        }
+
+        .aws-service-card {
+            padding: 2.25rem;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .aws-service-card::after {
+            content: "";
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 60px;
+            height: 60px;
+            background: linear-gradient(135deg, transparent 50%, rgba(255, 153, 0, 0.05) 50%);
+            pointer-events: none;
+        }
+
+        .aws-badge-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .aws-name {
+            font-size: 1.25rem;
+            font-weight: 800;
+            letter-spacing: -0.01em;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .aws-name i {
+            color: var(--aws-orange);
+            font-size: 1.15rem;
+        }
+
+        .aws-role-tag {
+            font-size: 0.7rem;
+            font-weight: 700;
+            background: rgba(255, 153, 0, 0.1);
+            border: 1px solid rgba(255, 153, 0, 0.3);
+            color: var(--aws-orange);
+            padding: 0.15rem 0.5rem;
+            border-radius: 4px;
+            text-transform: uppercase;
+        }
+
+        .aws-purpose {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            line-height: 1.6;
+            margin-bottom: 0.5rem;
+        }
+
+        .aws-card-footer {
+            border-top: 1px solid rgba(255, 255, 255, 0.06);
+            padding-top: 0.75rem;
+            margin-top: auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.8rem;
+        }
+
+        .aws-stat-label {
+            color: var(--text-muted);
+            font-weight: 500;
+        }
+
+        .aws-stat-value {
+            color: var(--aws-blue);
+            font-weight: 700;
+        }
+
+        /* ==========================================================================
+           10. MY RESPONSIBILITIES
+           ========================================================================== */
+        .responsibilities-layout {
+            display: grid;
+            grid-template-columns: 1.1fr 0.9fr;
+            gap: 3.5rem;
+            align-items: center;
+        }
+
+        .resp-list {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 1.25rem;
+        }
+
+        .resp-item {
+            position: relative;
+            padding-left: 2rem;
+            font-size: 0.95rem;
+            color: var(--text-secondary);
+        }
+
+        .resp-item::before {
+            content: "\f0e7"; /* Lightning bolt */
+            font-family: "Font Awesome 6 Free";
+            font-weight: 900;
+            position: absolute;
+            left: 0;
+            top: 2px;
+            color: var(--aws-orange);
+            font-size: 0.875rem;
+            transition: var(--transition-smooth);
+        }
+
+        .resp-item:hover::before {
+            transform: scale(1.2) rotate(15deg);
+            color: #ffaa00;
+        }
+
+        /* Code snippets section */
+        .code-container {
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid var(--border-glass);
+            background: #0d1117;
+            box-shadow: var(--shadow-glow);
+        }
+
+        .code-header {
+            background: #161b22;
+            padding: 0.75rem 1rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .code-dots {
+            display: flex;
+            gap: 0.4rem;
+        }
+
+        .code-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+
+        .dot-red { background: #ff5f56; }
+        .dot-yellow { background: #ffbd2e; }
+        .dot-green { background: #27c93f; }
+
+        .code-title {
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        .code-body {
+            padding: 1.25rem;
+            font-family: var(--font-mono);
+            font-size: 0.8rem;
+            line-height: 1.6;
+            overflow-x: auto;
+            color: #c9d1d9;
+        }
+
+        .keyword { color: #ff7b72; }
+        .function { color: #d2a8ff; }
+        .string { color: #a5d6ff; }
+        .comment { color: #8b949e; }
+        .class { color: #f0883e; }
+
+        /* ==========================================================================
+           11. IMPLEMENTATION PROCESS (TIMELINE)
+           ========================================================================== */
+        .timeline-container {
+            position: relative;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 2rem 0;
+        }
+
+        .timeline-container::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            left: 50%;
+            width: 2px;
+            background: linear-gradient(to bottom, transparent, rgba(255, 153, 0, 0.3) 10%, rgba(255, 153, 0, 0.3) 90%, transparent);
+            transform: translateX(-50%);
+        }
+
+        .timeline-item {
+            position: relative;
+            width: 50%;
+            padding: 1.5rem 3rem;
+            margin-bottom: 2rem;
+        }
+
+        .timeline-item.left {
+            left: 0;
+            text-align: right;
+        }
+
+        .timeline-item.right {
+            left: 50%;
+            text-align: left;
+        }
+
+        .timeline-dot {
+            position: absolute;
+            top: 2rem;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: var(--bg-dark);
+            border: 4px solid var(--aws-orange);
+            z-index: 2;
+            box-shadow: 0 0 10px var(--aws-orange);
+            transition: var(--transition-smooth);
+        }
+
+        .timeline-item.left .timeline-dot {
+            right: -10px;
+        }
+
+        .timeline-item.right .timeline-dot {
+            left: -10px;
+        }
+
+        .timeline-item:hover .timeline-dot {
+            background: var(--aws-orange);
+            transform: scale(1.2);
+        }
+
+        .timeline-card {
+            padding: 2rem;
+        }
+
+        .timeline-step {
+            font-size: 0.75rem;
+            font-weight: 800;
+            color: var(--aws-orange);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-bottom: 0.4rem;
+        }
+
+        .timeline-title {
+            font-size: 1.25rem;
+            font-weight: 700;
+            margin-bottom: 0.75rem;
+        }
+
+        .timeline-desc {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+
+        /* ==========================================================================
+           12. SCREENSHOTS GALLERY
+           ========================================================================== */
+        .gallery-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 2rem;
+        }
+
+        .gallery-card {
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .gallery-image-box {
+            position: relative;
+            width: 100%;
+            height: 200px;
+            background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+            border-bottom: 1px solid var(--border-glass);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .gallery-image-placeholder {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 1.5rem;
+            text-align: center;
+            background: rgba(15, 23, 42, 0.4);
+            transition: var(--transition-smooth);
+        }
+
+        .gallery-card:hover .gallery-image-placeholder {
+            background: rgba(255, 153, 0, 0.08);
+        }
+
+        .gallery-icon {
+            font-size: 2rem;
+            color: var(--aws-orange);
+            margin-bottom: 0.75rem;
+            opacity: 0.8;
+        }
+
+        .gallery-preview-label {
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            font-weight: 700;
+            letter-spacing: 0.05em;
+            color: var(--text-primary);
+        }
+
+        .gallery-info {
+            padding: 1.5rem;
+        }
+
+        .gallery-title {
+            font-size: 1.1rem;
+            font-weight: 700;
+            margin-bottom: 0.4rem;
+        }
+
+        .gallery-desc {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        /* ==========================================================================
+           13. CHALLENGES & SOLUTIONS
+           ========================================================================== */
+        .challenges-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 2rem;
+        }
+
+        .challenge-card {
+            padding: 2.25rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1.25rem;
+        }
+
+        .challenge-header {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            font-size: 1.2rem;
+            font-weight: 700;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            padding-bottom: 0.75rem;
+        }
+
+        .challenge-header i {
+            color: var(--danger);
+        }
+
+        .challenge-block h5 {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--aws-orange);
+            margin-bottom: 0.4rem;
+            font-weight: 800;
+        }
+
+        .challenge-block p {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+
+        .outcome-badge-row {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.8rem;
+            font-weight: 700;
+            color: var(--success);
+            margin-top: auto;
+            border-top: 1px solid rgba(255, 255, 255, 0.06);
+            padding-top: 0.75rem;
+        }
+
+        /* ==========================================================================
+           14. RESULTS & METRICS
+           ========================================================================== */
+        .results-section-wrapper {
+            background: linear-gradient(180deg, transparent, rgba(255, 153, 0, 0.01) 50%, transparent);
+            padding: 5rem 0;
+        }
+
+        .results-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 2rem;
+            margin-bottom: 4rem;
+        }
+
+        .result-card {
+            padding: 2rem;
+            display: flex;
+            gap: 1.25rem;
+        }
+
+        .result-icon {
+            width: 44px;
+            height: 44px;
+            border-radius: 8px;
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid rgba(16, 185, 129, 0.2);
+            color: var(--success);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 1.15rem;
+            flex-shrink: 0;
+        }
+
+        .result-info h4 {
+            font-size: 1.1rem;
+            font-weight: 700;
+            margin-bottom: 0.4rem;
+        }
+
+        .result-info p {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        /* Project Metrics Stats */
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1.5rem;
+        }
+
+        .metric-card-inner {
+            padding: 2rem;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .metric-number {
+            font-size: 2.75rem;
+            font-weight: 900;
+            color: var(--text-primary);
+            margin-bottom: 0.25rem;
+            letter-spacing: -0.03em;
+            background: linear-gradient(135deg, #ff9900 0%, #ff5500 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .metric-title {
+            font-size: 0.85rem;
+            font-weight: 700;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .metric-subtitle {
+            font-size: 0.72rem;
+            color: var(--text-muted);
+            margin-top: 0.2rem;
+        }
+
+        /* ==========================================================================
+           15. FUTURE IMPROVEMENTS (ROADMAP)
+           ========================================================================== */
+        .roadmap-timeline-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 2rem;
+        }
+
+        .roadmap-card {
+            padding: 2.25rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            position: relative;
+        }
+
+        .roadmap-card::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 4px;
+            height: 100%;
+            background: var(--aws-orange);
+            border-radius: 16px 0 0 16px;
+        }
+
+        .roadmap-card.phase-future::before {
+            background: var(--aws-blue);
+        }
+
+        .roadmap-phase {
+            font-size: 0.72rem;
+            font-weight: 800;
+            color: var(--aws-orange);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+        }
+
+        .roadmap-card.phase-future .roadmap-phase {
+            color: var(--aws-blue);
+        }
+
+        .roadmap-card-title {
+            font-size: 1.2rem;
+            font-weight: 700;
+        }
+
+        .roadmap-list {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 0.6rem;
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+
+        .roadmap-list li {
+            position: relative;
+            padding-left: 1.25rem;
+        }
+
+        .roadmap-list li::before {
+            content: "→";
+            position: absolute;
+            left: 0;
+            color: var(--aws-orange);
+        }
+
+        .roadmap-card.phase-future li::before {
+            color: var(--aws-blue);
+        }
+
+        /* ==========================================================================
+           16. RECRUITER SUMMARY (WHY THIS PROJECT MATTERS)
+           ========================================================================== */
+        .recruiter-summary-card {
+            padding: 3.5rem;
+            background: linear-gradient(135deg, rgba(35, 47, 62, 0.4) 0%, rgba(17, 24, 39, 0.6) 100%);
+            border: 1px solid rgba(255, 153, 0, 0.15);
+            box-shadow: 0 16px 48px 0 rgba(255, 153, 0, 0.04);
+        }
+
+        .recruiter-title {
+            font-size: 1.75rem;
+            font-weight: 800;
+            margin-bottom: 2rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .recruiter-title i {
+            color: var(--aws-orange);
+        }
+
+        .recruiter-bullets {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .recruiter-bullet-item {
+            position: relative;
+            padding-left: 2.5rem;
+        }
+
+        .recruiter-bullet-item h4 {
+            font-size: 1.1rem;
+            font-weight: 700;
+            margin-bottom: 0.3rem;
+            color: var(--text-primary);
+        }
+
+        .recruiter-bullet-item p {
+            font-size: 0.925rem;
+            color: var(--text-secondary);
+        }
+
+        .recruiter-bullet-item::before {
+            content: "\f0a9"; /* Arrow circle right */
+            font-family: "Font Awesome 6 Free";
+            font-weight: 900;
+            position: absolute;
+            left: 0;
+            top: 2px;
+            font-size: 1.25rem;
+            color: var(--aws-orange);
+        }
+
+        /* ==========================================================================
+           17. FOOTER & CTA LINKS
+           ========================================================================== */
+        .footer-cta {
+            border-top: 1px solid var(--border-glass);
+            padding: 4rem 0;
+            text-align: center;
+            background: rgba(7, 9, 19, 0.95);
+        }
+
+        .footer-title {
+            font-size: 1.5rem;
+            font-weight: 800;
+            margin-bottom: 1rem;
+        }
+
+        .footer-social-links {
+            display: flex;
+            justify-content: center;
+            gap: 1.5rem;
+            margin-bottom: 2.5rem;
+            flex-wrap: wrap;
+        }
+
+        .footer-link-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.6rem 1.25rem;
+            border-radius: 8px;
+            font-size: 0.875rem;
+            font-weight: 700;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .footer-link-btn:hover {
+            background: rgba(255, 153, 0, 0.1);
+            border-color: var(--aws-orange);
+            color: var(--aws-orange);
+            transform: translateY(-2px);
+        }
+
+        .footer-credits {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+
+        /* ==========================================================================
+           18. RESPONSIVE DESIGN MEDIA QUERIES
+           ========================================================================== */
+        @media (max-width: 1024px) {
+            .hero-grid {
+                grid-template-columns: 1fr;
+                gap: 2.5rem;
+            }
+
+            .responsibilities-layout {
+                grid-template-columns: 1fr;
+                gap: 2.5rem;
+            }
+
+            .case-details-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .solution-card-inner {
+                grid-template-columns: 1fr;
+                gap: 2rem;
+            }
+
+            .results-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 768px) {
+            section {
+                padding: 3.5rem 0;
+            }
+
+            .section-title {
+                font-size: 1.75rem;
+            }
+
+            .hero-title {
+                font-size: 2.25rem;
+            }
+
+            .timeline-container::before {
+                left: 1.5rem;
+            }
+
+            .timeline-item {
+                width: 100%;
+                padding-left: 3.5rem;
+                padding-right: 0;
+            }
+
+            .timeline-item.left {
+                text-align: left;
+            }
+
+            .timeline-item.left .timeline-dot, .timeline-item.right .timeline-dot {
+                left: 0.95rem;
+                right: auto;
+            }
+
+            .timeline-item.right {
+                left: 0;
+            }
+
+            .metrics-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .nav-links {
+                display: none; /* simple stack fallback */
+            }
+        }
+
+        @media (max-width: 480px) {
+            .metrics-grid {
+                grid-template-columns: 1fr;
+            }
+            .hero-action-buttons {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ========== NAVBAR ========== -->
+    <header class="header-nav">
+        <div class="container nav-container">
+            <a href="#" class="nav-logo">
+                <i class="fa-solid fa-cloud logo-accent"></i> Portfolio<span class="logo-accent">.Showcase</span>
+            </a>
+            <ul class="nav-links">
+                <li><a href="#overview" class="nav-link-item active">Overview</a></li>
+                <li><a href="#architecture" class="nav-link-item">Architecture</a></li>
+                <li><a href="#stack" class="nav-link-item">Tech Stack</a></li>
+                <li><a href="#aws" class="nav-link-item">AWS Integration</a></li>
+                <li><a href="#timeline" class="nav-link-item">Timeline</a></li>
+                <li><a href="#results" class="nav-link-item">Metrics &amp; Results</a></li>
+            </ul>
+            <a href="https://github.com" target="_blank" class="btn-header">
+                <i class="fa-brands fa-github"></i> Source Code
+            </a>
+        </div>
+    </header>
+
+    <!-- ========== HERO & PROJECT METADATA ========== -->
+    <section class="hero-section" id="hero">
+        <div class="container hero-grid">
+            <div class="hero-content reveal active">
+                <span class="hero-pretitle">AWS Cloud Case Study</span>
+                <h1 class="hero-title">Blissful Abodes Hotel Management Platform</h1>
+                <p class="hero-desc">
+                    An enterprise-grade, cloud-native hotel booking and guest management platform running on AWS. Re-engineered from a local development environment into a high-availability, AI-powered system leveraging serverless analytics and distributed databases.
+                </p>
+                <div class="hero-action-buttons">
+                    <a href="#architecture" class="btn-primary">
+                        <i class="fa-solid fa-diagram-project"></i> View Architecture
+                    </a>
+                    <a href="https://github.com" target="_blank" class="btn-secondary">
+                        <i class="fa-solid fa-code"></i> GitHub Repo
+                    </a>
+                </div>
+                <div class="tech-badges-row">
+                    <span class="badge badge-aws"><i class="fa-brands fa-aws"></i> AWS Cloud</span>
+                    <span class="badge badge-blue"><i class="fa-brands fa-python"></i> Flask / Python</span>
+                    <span class="badge"><i class="fa-solid fa-brain"></i> 5 AI Models</span>
+                    <span class="badge"><i class="fa-solid fa-server"></i> Nginx &amp; Gunicorn</span>
+                    <span class="badge"><i class="fa-solid fa-database"></i> PostgreSQL &amp; DynamoDB</span>
+                </div>
+            </div>
+            
+            <div class="glass-card meta-card reveal active">
+                <h3 class="meta-title">
+                    <i class="fa-solid fa-circle-info"></i> Project Information
+                </h3>
+                <ul class="meta-list">
+                    <li class="meta-item">
+                        <span class="meta-label">Category</span>
+                        <span class="meta-val">Academic / Portfolio Showcase</span>
+                    </li>
+                    <li class="meta-item">
+                        <span class="meta-label">Status</span>
+                        <span class="meta-val status-completed">Completed</span>
+                    </li>
+                    <li class="meta-item">
+                        <span class="meta-label">Duration</span>
+                        <span class="meta-val">4 Months</span>
+                    </li>
+                    <li class="meta-item">
+                        <span class="meta-label">Role</span>
+                        <span class="meta-val">Cloud Engineer &amp; Full Stack Developer</span>
+                    </li>
+                    <li class="meta-item">
+                        <span class="meta-label">Team Size</span>
+                        <span class="meta-val">1 (Self-directed)</span>
+                    </li>
+                    <li class="meta-item">
+                        <span class="meta-label">Difficulty Level</span>
+                        <span class="meta-val" style="color: var(--aws-orange);">Advanced</span>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </section>
+
+    <!-- ========== SECTION GRAPHICS OVERLAY ========== -->
+    <div class="container reveal">
+        <div class="banner-mockup">
+            <div class="banner-grid-overlay"></div>
+            <div class="banner-glow"></div>
+            <div class="banner-content-inner">
+                <div class="banner-logo">🏨</div>
+                <div class="banner-text">BLISSFUL ABODES CASE STUDY</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== OVERVIEW & PROBLEM STATEMENT ========== -->
+    <section id="overview" class="reveal">
+        <div class="container">
+            <div class="case-details-grid">
+                <div class="glass-card detail-card">
+                    <h3><i class="fa-solid fa-eye"></i> Project Overview</h3>
+                    <p>
+                        Blissful Abodes is a next-generation web application designed to handle end-to-end hotel bookings, cancellations, invoices, dynamic room recommendations, and automated risk checkins. Built initially as a local Flask booking application, this project showcases the complete re-architecture of the system into the AWS cloud environment.
+                    </p>
+                    <p>
+                        <strong>Who it is for:</strong> Mid-to-large-scale hospitality managers seeking to reduce administrative workloads and guests who want a personalized, self-service checking flow with zero friction.
+                    </p>
+                    <p>
+                        <strong>Main Objective:</strong> To build a scalable, highly secure infrastructure that integrates predictive AI engines directly into a traditional CRUD booking platform.
+                    </p>
+                </div>
+                
+                <div class="glass-card detail-card problem-card">
+                    <h3><i class="fa-solid fa-triangle-exclamation"></i> The Problem Statement</h3>
+                    <p>
+                        Legacy hospitality software suffers from severe architectural bottlenecks and vulnerabilities:
+                    </p>
+                    <ul>
+                        <li><strong>Business Threat (Fraud):</strong> High rates of booking scams and false refund claims cost operations significant manual audit hours.</li>
+                        <li><strong>User Pain Points:</strong> Long wait times at checking desks and static, un-optimized room pricing models that fail to match seasonal demands.</li>
+                        <li><strong>Technical Debt:</strong> A monolithic, single-database construct prone to outages during seasonal spikes, with local session state blocking horizontal scaling.</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Full-Width Solution Section -->
+            <div class="solution-section">
+                <div class="glass-card solution-card-inner">
+                    <div>
+                        <span class="section-tag">Engineered Solution</span>
+                        <h3 style="font-size: 1.75rem; margin-bottom: 1rem;"><i class="fa-solid fa-lightbulb" style="color: var(--aws-orange); margin-right: 0.5rem;"></i> The Cloud-Native Solution</h3>
+                        <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">
+                            The application was re-architected on AWS, decoupling data layers, migrating file uploads to distributed object storage, and implementing standard enterprise authentication. Sessions and chatbot conversation logs are offloaded to DynamoDB, while relational datasets are housed in a Postgres database hosted on RDS. 
+                        </p>
+                        <p style="color: var(--text-secondary);">
+                            Five intelligent ML models (using Scikit-Learn) run alongside the core Flask thread, intercepting bookings to analyze fraud likelihood, forecast cancellation probabilities, evaluate guest feedback sentiments, and dynamically set optimized room tariffs.
+                        </p>
+                    </div>
+                    <div class="solution-features-list">
+                        <div class="solution-feature-item">
+                            <div class="sol-icon-box"><i class="fa-solid fa-shield-halved"></i></div>
+                            <div class="sol-text-box">
+                                <h4>IAM Instance Profile Roles</h4>
+                                <p>Replaced hardcoded access keys on EC2 with strict role-based AWS policy checks.</p>
+                            </div>
+                        </div>
+                        <div class="solution-feature-item">
+                            <div class="sol-icon-box"><i class="fa-solid fa-bolt"></i></div>
+                            <div class="sol-text-box">
+                                <h4>Zero-State Application Nodes</h4>
+                                <p>Offloaded session state and chatbot histories to DynamoDB with custom TTLs.</p>
+                            </div>
+                        </div>
+                        <div class="solution-feature-item">
+                            <div class="sol-icon-box"><i class="fa-solid fa-volume-high"></i></div>
+                            <div class="sol-text-box">
+                                <h4>Asynchronous Decoupling</h4>
+                                <p>Notifications and high-priority fraud alerts are pushed to AWS SNS topics.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ========== SYSTEM ARCHITECTURE ========== -->
+    <section id="architecture" class="reveal">
+        <div class="container">
+            <div class="section-header">
+                <span class="section-tag">System Blueprint</span>
+                <h2 class="section-title">AWS Production Architecture</h2>
+            </div>
+            
+            <div class="glass-card architecture-wrapper">
+                <!-- SVG Interactive Diagram -->
+                <svg viewBox="0 0 1000 500" class="arch-interactive-svg" id="svgArch">
+                    <!-- Definitions for markers and filters -->
+                    <defs>
+                        <marker id="arrow" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                            <path d="M 0 0 L 10 5 L 0 10 z" fill="#94a3b8"/>
+                        </marker>
+                        <marker id="arrow-orange" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                            <path d="M 0 0 L 10 5 L 0 10 z" fill="#ff9900"/>
+                        </marker>
+                        <filter id="glow-orange">
+                            <feGaussianBlur stdDeviation="4" result="coloredBlur"/>
+                            <feMerge>
+                                <feMergeNode in="coloredBlur"/>
+                                <feMergeNode in="SourceGraphic"/>
+                            </feMerge>
+                        </filter>
+                    </defs>
+
+                    <!-- Background Grid -->
+                    <rect width="100%" height="100%" fill="none"/>
+
+                    <!-- CONNECTIONS (Links) -->
+                    <!-- Internet to SG -->
+                    <path d="M 80 250 L 160 250" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrow)" class="arch-link"/>
+                    <!-- SG to EC2 -->
+                    <path d="M 230 250 L 320 250" stroke="#ff9900" stroke-width="2" marker-end="url(#arrow-orange)" class="arch-link"/>
+                    <!-- EC2 to RDS -->
+                    <path d="M 440 220 L 580 140" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrow)" class="arch-link"/>
+                    <!-- EC2 to DynamoDB -->
+                    <path d="M 440 250 L 580 250" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrow)" class="arch-link"/>
+                    <!-- EC2 to S3 -->
+                    <path d="M 440 280 L 580 360" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrow)" class="arch-link"/>
+                    <!-- EC2 to Cognito -->
+                    <path d="M 380 190 L 380 110" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrow)" class="arch-link"/>
+                    <!-- EC2 to SNS -->
+                    <path d="M 440 240 L 780 240 L 780 140" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrow)" class="arch-link"/>
+                    <!-- EC2 to CloudWatch -->
+                    <path d="M 380 310 L 380 410" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrow)" class="arch-link"/>
+                    <!-- Lambda to S3/RDS -->
+                    <path d="M 760 360 L 660 360" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="4" marker-end="url(#arrow)"/>
+                    <path d="M 760 360 L 660 140" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="4" marker-end="url(#arrow)"/>
+
+                    <!-- NODES (Groups) -->
+                    <!-- 1. Internet Clients -->
+                    <g class="arch-node" id="node-internet" onclick="showArchInfo('internet')">
+                        <rect x="20" y="210" width="60" height="80" rx="8" fill="#1e293b" stroke="#94a3b8" stroke-width="1.5"/>
+                        <text x="50" y="245" fill="#f8fafc" font-size="20" text-anchor="middle">🌐</text>
+                        <text x="50" y="275" fill="#94a3b8" font-size="10" font-weight="700" text-anchor="middle">Users (Web)</text>
+                    </g>
+
+                    <!-- 2. Security Group / VPC Boundary -->
+                    <g class="arch-node" id="node-sg" onclick="showArchInfo('sg')">
+                        <rect x="160" y="180" width="70" height="140" rx="8" fill="rgba(239, 68, 68, 0.1)" stroke="#ef4444" stroke-width="2"/>
+                        <text x="195" y="235" fill="#ef4444" font-size="24" text-anchor="middle">🛡️</text>
+                        <text x="195" y="265" fill="#ef4444" font-size="9" font-weight="800" text-anchor="middle">AWS SG</text>
+                        <text x="195" y="280" fill="#f8fafc" font-size="8" font-weight="500" text-anchor="middle">Ports: 80/443</text>
+                    </g>
+
+                    <!-- 3. Amazon EC2 Instance -->
+                    <g class="arch-node" id="node-ec2" onclick="showArchInfo('ec2')">
+                        <rect x="320" y="190" width="120" height="120" rx="12" fill="#111729" stroke="#ff9900" stroke-width="2.5" filter="url(#glow-orange)"/>
+                        <text x="380" y="235" fill="#ff9900" font-size="32" text-anchor="middle">🖥️</text>
+                        <text x="380" y="265" fill="#f8fafc" font-size="11" font-weight="800" text-anchor="middle">Amazon EC2</text>
+                        <text x="380" y="280" fill="#94a3b8" font-size="9" font-weight="600" text-anchor="middle">Flask / Gunicorn</text>
+                        <text x="380" y="292" fill="#ff9900" font-size="8" font-family="monospace" text-anchor="middle">t2.micro (Ubuntu)</text>
+                    </g>
+
+                    <!-- 4. Amazon RDS PostgreSQL -->
+                    <g class="arch-node" id="node-rds" onclick="showArchInfo('rds')">
+                        <rect x="580" y="80" width="80" height="80" rx="10" fill="#111729" stroke="#00a1ec" stroke-width="1.5"/>
+                        <text x="620" y="115" fill="#00a1ec" font-size="24" text-anchor="middle">🗃️</text>
+                        <text x="620" y="140" fill="#f8fafc" font-size="9" font-weight="800" text-anchor="middle">Amazon RDS</text>
+                        <text x="620" y="150" fill="#94a3b8" font-size="8" font-weight="500" text-anchor="middle">PostgreSQL</text>
+                    </g>
+
+                    <!-- 5. Amazon DynamoDB -->
+                    <g class="arch-node" id="node-ddb" onclick="showArchInfo('ddb')">
+                        <rect x="580" y="210" width="80" height="80" rx="10" fill="#111729" stroke="#00a1ec" stroke-width="1.5"/>
+                        <text x="620" y="245" fill="#00a1ec" font-size="24" text-anchor="middle">⚡</text>
+                        <text x="620" y="270" fill="#f8fafc" font-size="9" font-weight="800" text-anchor="middle">DynamoDB</text>
+                        <text x="620" y="280" fill="#94a3b8" font-size="7" font-weight="500" text-anchor="middle">Sessions &amp; Chats</text>
+                    </g>
+
+                    <!-- 6. Amazon S3 Bucket -->
+                    <g class="arch-node" id="node-s3" onclick="showArchInfo('s3')">
+                        <rect x="580" y="340" width="80" height="80" rx="10" fill="#111729" stroke="#00a1ec" stroke-width="1.5"/>
+                        <text x="620" y="375" fill="#00a1ec" font-size="24" text-anchor="middle">🪣</text>
+                        <text x="620" y="400" fill="#f8fafc" font-size="9" font-weight="800" text-anchor="middle">Amazon S3</text>
+                        <text x="620" y="410" fill="#94a3b8" font-size="8" font-weight="500" text-anchor="middle">Media &amp; PDFs</text>
+                    </g>
+
+                    <!-- 7. AWS Cognito -->
+                    <g class="arch-node" id="node-cognito" onclick="showArchInfo('cognito')">
+                        <rect x="340" y="30" width="80" height="80" rx="10" fill="#111729" stroke="#a855f7" stroke-width="1.5"/>
+                        <text x="380" y="65" fill="#a855f7" font-size="24" text-anchor="middle">🔐</text>
+                        <text x="380" y="90" fill="#f8fafc" font-size="9" font-weight="800" text-anchor="middle">Cognito Pools</text>
+                        <text x="380" y="100" fill="#94a3b8" font-size="8" font-weight="500" text-anchor="middle">User Auth / JWT</text>
+                    </g>
+
+                    <!-- 8. Amazon SNS -->
+                    <g class="arch-node" id="node-sns" onclick="showArchInfo('sns')">
+                        <rect x="740" y="80" width="80" height="80" rx="10" fill="#111729" stroke="#a855f7" stroke-width="1.5"/>
+                        <text x="780" y="115" fill="#a855f7" font-size="24" text-anchor="middle">📣</text>
+                        <text x="780" y="140" fill="#f8fafc" font-size="9" font-weight="800" text-anchor="middle">Amazon SNS</text>
+                        <text x="780" y="150" fill="#94a3b8" font-size="8" font-weight="500" text-anchor="middle">SMS &amp; Alerts</text>
+                    </g>
+
+                    <!-- 9. Amazon CloudWatch -->
+                    <g class="arch-node" id="node-cw" onclick="showArchInfo('cw')">
+                        <rect x="340" y="410" width="80" height="80" rx="10" fill="#111729" stroke="#10b981" stroke-width="1.5"/>
+                        <text x="380" y="445" fill="#10b981" font-size="24" text-anchor="middle">📊</text>
+                        <text x="380" y="470" fill="#f8fafc" font-size="8" font-weight="800" text-anchor="middle">CloudWatch</text>
+                        <text x="380" y="480" fill="#94a3b8" font-size="7" font-weight="500" text-anchor="middle">Logs &amp; Alerts</text>
+                    </g>
+
+                    <!-- 10. AWS Lambda / SQS -->
+                    <g class="arch-node" id="node-lambda" onclick="showArchInfo('lambda')">
+                        <rect x="760" y="320" width="80" height="80" rx="10" fill="#111729" stroke="#ff9900" stroke-width="1.5"/>
+                        <text x="800" y="355" fill="#ff9900" font-size="24" text-anchor="middle">λ</text>
+                        <text x="800" y="380" fill="#f8fafc" font-size="9" font-weight="800" text-anchor="middle">AWS Lambda</text>
+                        <text x="800" y="390" fill="#94a3b8" font-size="8" font-weight="500" text-anchor="middle">Worker SQS</text>
+                    </g>
+                </svg>
+
+                <div class="arch-details-panel" id="archPanel">
+                    <div class="arch-details-title" id="archPanelTitle">
+                        <i class="fa-solid fa-circle-question"></i> Interactive Architecture Map
+                    </div>
+                    <div class="arch-details-text" id="archPanelDesc">
+                        Click on any node in the AWS architecture diagram above to drill down into the technical execution details, VPC setups, and scaling policies implemented for that system component.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ========== CORE APP FEATURES ========== -->
+    <section id="features" class="reveal">
+        <div class="container">
+            <div class="section-header">
+                <span class="section-tag">Functional Blocks</span>
+                <h2 class="section-title">Application Capabilities</h2>
+            </div>
+            
+            <div class="features-grid">
+                <!-- User Login -->
+                <div class="glass-card feature-card">
+                    <div class="feature-icon-wrapper"><i class="fa-solid fa-right-to-bracket"></i></div>
+                    <h4 class="feature-card-title">User Login</h4>
+                    <p class="feature-card-desc">Secure portal accessing dashboards with email activation, JWT verification, and automatic session refreshes.</p>
+                </div>
+                <!-- Dashboard -->
+                <div class="glass-card feature-card">
+                    <div class="feature-icon-wrapper"><i class="fa-solid fa-chart-pie"></i></div>
+                    <h4 class="feature-card-title">Dashboard</h4>
+                    <p class="feature-card-desc">Interactive dashboards displaying dynamic stats specific to Guests, Staff, Managers, Admins, and Superadmins.</p>
+                </div>
+                <!-- Analytics -->
+                <div class="glass-card feature-card">
+                    <div class="feature-icon-wrapper"><i class="fa-solid fa-chart-line"></i></div>
+                    <h4 class="feature-card-title">Analytics</h4>
+                    <p class="feature-card-desc">Dynamic pricing and demand forecasting metrics modeled automatically using scikit-learn algorithms.</p>
+                </div>
+                <!-- Notifications -->
+                <div class="glass-card feature-card">
+                    <div class="feature-icon-wrapper"><i class="fa-solid fa-bell"></i></div>
+                    <h4 class="feature-card-title">Notifications</h4>
+                    <p class="feature-card-desc">Real-time alert engine delivering transactional notifications and push events via AWS SNS topics.</p>
+                </div>
+                <!-- Admin Panel -->
+                <div class="glass-card feature-card">
+                    <div class="feature-icon-wrapper"><i class="fa-solid fa-user-gear"></i></div>
+                    <h4 class="feature-card-title">Admin Panel</h4>
+                    <p class="feature-card-desc">Advanced hotel manager operations for rooms, bookings, transaction audits, and manual fraud overrides.</p>
+                </div>
+                <!-- Authentication -->
+                <div class="glass-card feature-card">
+                    <div class="feature-icon-wrapper"><i class="fa-solid fa-lock"></i></div>
+                    <h4 class="feature-card-title">Cognito Auth</h4>
+                    <p class="feature-card-desc">Decentralized user state management integrated via Amazon Cognito User Pools with MFA support.</p>
+                </div>
+                <!-- Cloud Deployment -->
+                <div class="glass-card feature-card">
+                    <div class="feature-icon-wrapper"><i class="fa-solid fa-cloud-arrow-up"></i></div>
+                    <h4 class="feature-card-title">Cloud Deployment</h4>
+                    <p class="feature-card-desc">Production-grade VM instance deployment with custom IAM roles, reverse-proxied using Nginx server configs.</p>
+                </div>
+                <!-- Responsive Design -->
+                <div class="glass-card feature-card">
+                    <div class="feature-icon-wrapper"><i class="fa-solid fa-mobile-screen-button"></i></div>
+                    <h4 class="feature-card-title">Responsive Design</h4>
+                    <p class="feature-card-desc">Mobile-first user flows engineered to adjust grids, navbars, tables, and images dynamically across screens.</p>
+                </div>
+                <!-- Dark Mode -->
+                <div class="glass-card feature-card">
+                    <div class="feature-icon-wrapper"><i class="fa-solid fa-moon"></i></div>
+                    <h4 class="feature-card-title">Dark Mode</h4>
+                    <p class="feature-card-desc">System-level themes stored in local storage utilizing responsive CSS variables to style UI elements.</p>
+                </div>
+                <!-- Search -->
+                <div class="glass-card feature-card">
+                    <div class="feature-icon-wrapper"><i class="fa-solid fa-magnifying-glass"></i></div>
+                    <h4 class="feature-card-title">Search</h4>
+                    <p class="feature-card-desc">Custom filtering algorithm that aggregates price, room features, reviews, and availability indexes in real time.</p>
+                </div>
+                <!-- Reports -->
+                <div class="glass-card feature-card">
+                    <div class="feature-icon-wrapper"><i class="fa-solid fa-file-invoice"></i></div>
+                    <h4 class="feature-card-title">Reports</h4>
+                    <p class="feature-card-desc">Financial audit trails generated using Python worker engines and compiled as transactional documents.</p>
+                </div>
+                <!-- Export PDF -->
+                <div class="glass-card feature-card">
+                    <div class="feature-icon-wrapper"><i class="fa-solid fa-file-pdf"></i></div>
+                    <h4 class="feature-card-title">Export PDF</h4>
+                    <p class="feature-card-desc">Asynchronous compilation of PDF room receipts and booking invoices pushed securely to Amazon S3 buckets.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ========== TECH STACK ========== -->
+    <section id="stack" class="reveal">
+        <div class="container">
+            <div class="section-header">
+                <span class="section-tag">Stack Architecture</span>
+                <h2 class="section-title">Core Technology Stack</h2>
+            </div>
+            
+            <div class="tech-stack-container">
+                <!-- Frontend -->
+                <div class="glass-card tech-group-card">
+                    <h3 class="tech-group-title"><i class="fa-solid fa-window-restore"></i> Frontend</h3>
+                    <div class="tech-items-flex">
+                        <span class="badge">HTML5</span>
+                        <span class="badge">CSS3 (Variables)</span>
+                        <span class="badge">Vanilla JavaScript</span>
+                        <span class="badge">Jinja2 Template Engine</span>
+                        <span class="badge">Chart.js (Dashboards)</span>
+                    </div>
+                </div>
+                
+                <!-- Backend -->
+                <div class="glass-card tech-group-card">
+                    <h3 class="tech-group-title"><i class="fa-solid fa-gears"></i> Backend</h3>
+                    <div class="tech-items-flex">
+                        <span class="badge">Python 3.10</span>
+                        <span class="badge">Flask Micro-Framework</span>
+                        <span class="badge">Gunicorn WSGI Server</span>
+                        <span class="badge">Nginx Reverse Proxy</span>
+                        <span class="badge">Boto3 (AWS SDK)</span>
+                    </div>
+                </div>
+                
+                <!-- Database -->
+                <div class="glass-card tech-group-card">
+                    <h3 class="tech-group-title"><i class="fa-solid fa-database"></i> Database</h3>
+                    <div class="tech-items-flex">
+                        <span class="badge badge-blue">SQLite (Local Dev)</span>
+                        <span class="badge badge-blue">PostgreSQL (Prod RDS)</span>
+                        <span class="badge badge-aws">Amazon DynamoDB</span>
+                        <span class="badge">SQLAlchemy (ORM Layer)</span>
+                    </div>
+                </div>
+                
+                <!-- Cloud & DevOps -->
+                <div class="glass-card tech-group-card">
+                    <h3 class="tech-group-title"><i class="fa-solid fa-cloud"></i> Cloud &amp; DevOps</h3>
+                    <div class="tech-items-flex">
+                        <span class="badge badge-aws">Amazon EC2</span>
+                        <span class="badge badge-aws">AWS Lambda</span>
+                        <span class="badge badge-aws">Amazon S3</span>
+                        <span class="badge badge-aws">AWS IAM / STS</span>
+                        <span class="badge badge-aws">Amazon CloudWatch</span>
+                        <span class="badge badge-aws">AWS VPC</span>
+                        <span class="badge badge-aws">Amazon SNS / SQS</span>
+                        <span class="badge">Docker</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ========== AWS SERVICES DETAILS ========== -->
+    <section id="aws" class="reveal">
+        <div class="container">
+            <div class="section-header">
+                <span class="section-tag">AWS Infrastructure</span>
+                <h2 class="section-title">AWS Service Integrations</h2>
+            </div>
+            
+            <div class="aws-grid">
+                <!-- EC2 -->
+                <div class="glass-card aws-service-card">
+                    <div class="aws-badge-header">
+                        <h4 class="aws-name"><i class="fa-solid fa-server"></i> Amazon EC2</h4>
+                        <span class="aws-role-tag">Compute</span>
+                    </div>
+                    <p class="aws-purpose">
+                        Hosts the production Flask app inside an Ubuntu instance. Configured with a systemd daemon file, Gunicorn handlers, and Nginx acting as a reverse proxy on ports 80/443.
+                    </p>
+                    <div class="aws-card-footer">
+                        <span class="aws-stat-label">Instance Type</span>
+                        <span class="aws-stat-value">t2.micro</span>
+                    </div>
+                </div>
+                <!-- Lambda -->
+                <div class="glass-card aws-service-card">
+                    <div class="aws-badge-header">
+                        <h4 class="aws-name">λ AWS Lambda</h4>
+                        <span class="aws-role-tag">Serverless</span>
+                    </div>
+                    <p class="aws-purpose">
+                        Executes serverless reporting functions. When guests complete their bookings, Lambda triggers asynchronously to generate the PDF receipt, avoiding CPU spikes on the main thread.
+                    </p>
+                    <div class="aws-card-footer">
+                        <span class="aws-stat-label">Execution Time</span>
+                        <span class="aws-stat-value">&lt; 350ms</span>
+                    </div>
+                </div>
+                <!-- S3 -->
+                <div class="glass-card aws-service-card">
+                    <div class="aws-badge-header">
+                        <h4 class="aws-name"><i class="fa-solid fa-bucket"></i> Amazon S3</h4>
+                        <span class="aws-role-tag">Storage</span>
+                    </div>
+                    <p class="aws-purpose">
+                        Acts as durable object storage for high-resolution hotel room images, guest profile uploads, and compiled PDF checkout reports. Configured with a lifecycle policy.
+                    </p>
+                    <div class="aws-card-footer">
+                        <span class="aws-stat-label">Durability</span>
+                        <span class="aws-stat-value">99.999999999%</span>
+                    </div>
+                </div>
+                <!-- IAM -->
+                <div class="glass-card aws-service-card">
+                    <div class="aws-badge-header">
+                        <h4 class="aws-name"><i class="fa-solid fa-key"></i> AWS IAM</h4>
+                        <span class="aws-role-tag">Security</span>
+                    </div>
+                    <p class="aws-purpose">
+                        Enforces the principle of least privilege. The EC2 instances are attached to an IAM Instance Profile, obtaining STS temporary session credentials instead of saving credentials on disk.
+                    </p>
+                    <div class="aws-card-footer">
+                        <span class="aws-stat-label">Access Model</span>
+                        <span class="aws-stat-value">Role-Based (STS)</span>
+                    </div>
+                </div>
+                <!-- CloudWatch -->
+                <div class="glass-card aws-service-card">
+                    <div class="aws-badge-header">
+                        <h4 class="aws-name"><i class="fa-solid fa-gauge"></i> CloudWatch</h4>
+                        <span class="aws-role-tag">Monitoring</span>
+                    </div>
+                    <p class="aws-purpose">
+                        Aggregates Nginx access logs and custom application metrics. CPU metrics are tracked; if threshold limit is hit during ML inference, an SNS alarm fires an alert.
+                    </p>
+                    <div class="aws-card-footer">
+                        <span class="aws-stat-label">Alarm Threshold</span>
+                        <span class="aws-stat-value">80% CPU</span>
+                    </div>
+                </div>
+                <!-- DynamoDB -->
+                <div class="glass-card aws-service-card">
+                    <div class="aws-badge-header">
+                        <h4 class="aws-name"><i class="fa-solid fa-bolt"></i> DynamoDB</h4>
+                        <span class="aws-role-tag">NoSQL DB</span>
+                    </div>
+                    <p class="aws-purpose">
+                        Stores session states, user audit trails, and conversational histories from the Aria AI Concierge. Dynamically purges stale entries using native Time-To-Live (TTL) timestamps.
+                    </p>
+                    <div class="aws-card-footer">
+                        <span class="aws-stat-label">Latency</span>
+                        <span class="aws-stat-value">&lt; 10ms</span>
+                    </div>
+                </div>
+                <!-- VPC -->
+                <div class="glass-card aws-service-card">
+                    <div class="aws-badge-header">
+                        <h4 class="aws-name"><i class="fa-solid fa-network-wired"></i> AWS VPC</h4>
+                        <span class="aws-role-tag">Networking</span>
+                    </div>
+                    <p class="aws-purpose">
+                        Isolates database layers from the public web. Relational RDS databases run in private subnets, while EC2 hosts are located in public subnets routed via an Internet Gateway.
+                    </p>
+                    <div class="aws-card-footer">
+                        <span class="aws-stat-label">Subnets Config</span>
+                        <span class="aws-stat-value">Public / Private</span>
+                    </div>
+                </div>
+                <!-- RDS -->
+                <div class="glass-card aws-service-card">
+                    <div class="aws-badge-header">
+                        <h4 class="aws-name"><i class="fa-solid fa-database"></i> Amazon RDS</h4>
+                        <span class="aws-role-tag">Relational DB</span>
+                    </div>
+                    <p class="aws-purpose">
+                        Hosts production PostgreSQL. Manages booking details, room structures, rates, and guest feedback records. Automatic nightly backups and point-in-time recovery are active.
+                    </p>
+                    <div class="aws-card-footer">
+                        <span class="aws-stat-label">Engine</span>
+                        <span class="aws-stat-value">PostgreSQL</span>
+                    </div>
+                </div>
+                <!-- SNS -->
+                <div class="glass-card aws-service-card">
+                    <div class="aws-badge-header">
+                        <h4 class="aws-name"><i class="fa-solid fa-bullhorn"></i> Amazon SNS</h4>
+                        <span class="aws-role-tag">Messaging</span>
+                    </div>
+                    <p class="aws-purpose">
+                        Publishes booking transactional confirmations to guests and pushes immediate warning notifications to administrator mobile targets when high-risk bookings are flagged.
+                    </p>
+                    <div class="aws-card-footer">
+                        <span class="aws-stat-label">Endpoints</span>
+                        <span class="aws-stat-value">Email &amp; SMS</span>
+                    </div>
+                </div>
+                <!-- SQS -->
+                <div class="glass-card aws-service-card">
+                    <div class="aws-badge-header">
+                        <h4 class="aws-name"><i class="fa-solid fa-list-check"></i> Amazon SQS</h4>
+                        <span class="aws-role-tag">Queueing</span>
+                    </div>
+                    <p class="aws-purpose">
+                        Decouples email queues from the booking checkout flow. Under heavy load, checkouts submit email requests to SQS, which standardizes delivery and executes automatic retries.
+                    </p>
+                    <div class="aws-card-footer">
+                        <span class="aws-stat-label">Queue Type</span>
+                        <span class="aws-stat-value">Standard (FIFO)</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ========== RESPONSIBILITIES & CODE SNIPPET ========== -->
+    <section id="responsibilities" class="reveal">
+        <div class="container responsibilities-layout">
+            <div class="resp-content">
+                <span class="section-tag">Core Execution</span>
+                <h2 class="section-title" style="margin-bottom: 2rem;">My Engineering Responsibilities</h2>
+                <ul class="resp-list">
+                    <li class="resp-item">Designed and built the AWS structural topology utilizing a custom VPC with isolated public and private subnets.</li>
+                    <li class="resp-item">Implemented role-based EC2 access models utilizing IAM Instance Profiles to eradicate hardcoded credentials from the repository.</li>
+                    <li class="resp-item">Configured Gunicorn handlers and engineered the Nginx reverse proxy configuration on the production Ubuntu server.</li>
+                    <li class="resp-item">Offloaded user booking transaction PDFs and hotel room images to Amazon S3 storage buckets with lifecycle policies.</li>
+                    <li class="resp-item">Developed the Boto3 DynamoDB integration to store Flask session states and user AI chatbot history with TTL configurations.</li>
+                    <li class="resp-item">Programmed the AI Fraud Detection module checking ML risk probabilities to immediately block high-risk booking attempts.</li>
+                    <li class="resp-item">Established Amazon SNS publisher configurations that push SMS transaction details and administrator security warnings.</li>
+                    <li class="resp-item">Migrated local development SQLite configurations into an RDS PostgreSQL cluster separated by security group policies.</li>
+                    <li class="resp-item">Orchestrated system logging and alarm indicators inside Amazon CloudWatch to monitor memory usage and EC2 thresholds.</li>
+                    <li class="resp-item">Decoupled execution processes by integrating Amazon SQS pipelines to manage non-blocking email notifications.</li>
+                    <li class="resp-item">Designed dynamic pricing modules adjusting rates based on real-time room capacity, season variables, and occupancy models.</li>
+                    <li class="resp-item">Built and deployed five custom scikit-learn models implementing recommendation engines and cancellation predictors.</li>
+                </ul>
+            </div>
+            
+            <div class="code-column">
+                <div class="code-container">
+                    <div class="code-header">
+                        <div class="code-dots">
+                            <span class="code-dot dot-red"></span>
+                            <span class="code-dot dot-yellow"></span>
+                            <span class="code-dot dot-green"></span>
+                        </div>
+                        <span class="code-title">services/dynamodb_service.py</span>
+                    </div>
+                    <pre class="code-body"><code><span class="comment"># DynamoDB Chat History Storage Integration</span>
+<span class="keyword">import</span> boto3
+<span class="keyword">from</span> botocore.exceptions <span class="keyword">import</span> ClientError
+<span class="keyword">from</span> datetime <span class="keyword">import</span> datetime, timedelta
+
+<span class="keyword">class</span> <span class="class">DynamoDBSessionService</span>:
+    <span class="keyword">def</span> <span class="function">__init__</span>(self, table_name=<span class="string">"blissful-chatbot-history"</span>):
+        self.db = boto3.resource(<span class="string">'dynamodb'</span>, region_name=<span class="string">'ap-south-1'</span>)
+        self.table = self.db.Table(table_name)
+
+    <span class="keyword">def</span> <span class="function">save_chat_message</span>(self, user_id, message, sender):
+        ttl = int((datetime.utcnow() + timedelta(days=30)).timestamp())
+        <span class="keyword">try</span>:
+            self.table.put_item(
+                Item={
+                    <span class="string">'user_id'</span>: str(user_id),
+                    <span class="string">'timestamp'</span>: datetime.utcnow().isoformat(),
+                    <span class="string">'message'</span>: message,
+                    <span class="string">'sender'</span>: sender,
+                    <span class="string">'ttl'</span>: ttl
+                }
+            )
+            <span class="keyword">return</span> True
+        <span class="keyword">except</span> ClientError <span class="keyword">as</span> e:
+            print(f<span class="string">"DynamoDB Error: {e.response['Error']['Message']}"</span>)
+            <span class="keyword">return</span> False</code></pre>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ========== IMPLEMENTATION PROCESS (TIMELINE) ========== -->
+    <section id="timeline" class="reveal">
+        <div class="container">
+            <div class="section-header">
+                <span class="section-tag">Project Lifecycle</span>
+                <h2 class="section-title">Implementation Process</h2>
+            </div>
+            
+            <div class="timeline-container">
+                <!-- Planning -->
+                <div class="timeline-item left reveal">
+                    <span class="timeline-dot"></span>
+                    <div class="glass-card timeline-card">
+                        <div class="timeline-step">Phase 01</div>
+                        <h4 class="timeline-title">Planning &amp; Design</h4>
+                        <p class="timeline-desc">
+                            Gathered system requirements, defined the AWS structural outline, calculated resource budget estimates, and mapped the data entities to relational SQLite tables.
+                        </p>
+                    </div>
+                </div>
+                
+                <!-- Design -->
+                <div class="timeline-item right reveal">
+                    <span class="timeline-dot"></span>
+                    <div class="glass-card timeline-card">
+                        <div class="timeline-step">Phase 02</div>
+                        <h4 class="timeline-title">Database Design &amp; Architecture</h4>
+                        <p class="timeline-desc">
+                            Modeled database relationships, generated SQL schemas, and built isolated mock Python classes for S3 bucket uploads and SNS push events.
+                        </p>
+                    </div>
+                </div>
+                
+                <!-- Development -->
+                <div class="timeline-item left reveal">
+                    <span class="timeline-dot"></span>
+                    <div class="glass-card timeline-card">
+                        <div class="timeline-step">Phase 03</div>
+                        <h4 class="timeline-title">Application Development</h4>
+                        <p class="timeline-desc">
+                            Programmed Flask backend controllers, built Jinja2 dashboards, integrated Razorpay payment pipelines, and trained scikit-learn models on historical datasets.
+                        </p>
+                    </div>
+                </div>
+                
+                <!-- Testing -->
+                <div class="timeline-item right reveal">
+                    <span class="timeline-dot"></span>
+                    <div class="glass-card timeline-card">
+                        <div class="timeline-step">Phase 04</div>
+                        <h4 class="timeline-title">AWS Service Testing</h4>
+                        <p class="timeline-desc">
+                            Verified Cognito signup endpoints, tested DynamoDB TTL tables, and validated IAM policies locally using Moto mocked AWS responses.
+                        </p>
+                    </div>
+                </div>
+                
+                <!-- Deployment -->
+                <div class="timeline-item left reveal">
+                    <span class="timeline-dot"></span>
+                    <div class="glass-card timeline-card">
+                        <div class="timeline-step">Phase 05</div>
+                        <h4 class="timeline-title">Cloud Deployment</h4>
+                        <p class="timeline-desc">
+                            Provisioned VPC structures, migrated development databases to PostgreSQL RDS, spun up EC2 compute layers, configured Nginx proxy parameters, and mapped domain endpoints.
+                        </p>
+                    </div>
+                </div>
+                
+                <!-- Monitoring -->
+                <div class="timeline-item right reveal">
+                    <span class="timeline-dot"></span>
+                    <div class="glass-card timeline-card">
+                        <div class="timeline-step">Phase 06</div>
+                        <h4 class="timeline-title">Observability &amp; Alarms</h4>
+                        <p class="timeline-desc">
+                            Aggregated application errors into CloudWatch logs and created alarm indicators configured to alert system administration via SMS metrics.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ========== SCREENSHOTS GALLERY ========== -->
+    <section id="gallery" class="reveal">
+        <div class="container">
+            <div class="section-header">
+                <span class="section-tag">Visual Walkthrough</span>
+                <h2 class="section-title">Application Interface Gallery</h2>
+            </div>
+            
+            <div class="gallery-grid">
+                <!-- Home Page -->
+                <div class="glass-card gallery-card">
+                    <div class="gallery-image-box">
+                        <div class="gallery-image-placeholder">
+                            <span class="gallery-icon">🌐</span>
+                            <span class="gallery-preview-label">PORTAL INTERFACE</span>
+                        </div>
+                    </div>
+                    <div class="gallery-info">
+                        <h4 class="gallery-title">Home Page</h4>
+                        <p class="gallery-desc">Responsive public portal showing hotel rooms, features, and reservation checks.</p>
+                    </div>
+                </div>
+                
+                <!-- Dashboard -->
+                <div class="glass-card gallery-card">
+                    <div class="gallery-image-box">
+                        <div class="gallery-image-placeholder">
+                            <span class="gallery-icon">📊</span>
+                            <span class="gallery-preview-label">ANALYTICS PANEL</span>
+                        </div>
+                    </div>
+                    <div class="gallery-info">
+                        <h4 class="gallery-title">Guest Dashboard</h4>
+                        <p class="gallery-desc">Personalized hub showing upcoming stays, transaction history, and loyalty scores.</p>
+                    </div>
+                </div>
+                
+                <!-- Admin -->
+                <div class="glass-card gallery-card">
+                    <div class="gallery-image-box">
+                        <div class="gallery-image-placeholder">
+                            <span class="gallery-icon">🛡️</span>
+                            <span class="gallery-preview-label">ADMIN MODULE</span>
+                        </div>
+                    </div>
+                    <div class="gallery-info">
+                        <h4 class="gallery-title">Admin Management</h4>
+                        <p class="gallery-desc">Centralized controls for room inventory, staff roles, and audit trail logs.</p>
+                    </div>
+                </div>
+                
+                <!-- Reports -->
+                <div class="glass-card gallery-card">
+                    <div class="gallery-image-box">
+                        <div class="gallery-image-placeholder">
+                            <span class="gallery-icon">📄</span>
+                            <span class="gallery-preview-label">INVOICE GENERATOR</span>
+                        </div>
+                    </div>
+                    <div class="gallery-info">
+                        <h4 class="gallery-title">Reports &amp; PDF Receipts</h4>
+                        <p class="gallery-desc">Automated PDF compilation system pushing GST billing invoices to S3 storage.</p>
+                    </div>
+                </div>
+                
+                <!-- Analytics -->
+                <div class="glass-card gallery-card">
+                    <div class="gallery-image-box">
+                        <div class="gallery-image-placeholder">
+                            <span class="gallery-icon">📈</span>
+                            <span class="gallery-preview-label">AI PREDICTIONS</span>
+                        </div>
+                    </div>
+                    <div class="gallery-info">
+                        <h4 class="gallery-title">Analytics Dashboard</h4>
+                        <p class="gallery-desc">Displays predictive charts for demand patterns and occupancy adjustments.</p>
+                    </div>
+                </div>
+                
+                <!-- Settings -->
+                <div class="glass-card gallery-card">
+                    <div class="gallery-image-box">
+                        <div class="gallery-image-placeholder">
+                            <span class="gallery-icon">⚙️</span>
+                            <span class="gallery-preview-label">AWS INFRA PANEL</span>
+                        </div>
+                    </div>
+                    <div class="gallery-info">
+                        <h4 class="gallery-title">System Settings</h4>
+                        <p class="gallery-desc">Infrastructure check panels testing VPC connections and AWS API integrations.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ========== CHALLENGES & RESOLUTIONS ========== -->
+    <section id="challenges" class="reveal">
+        <div class="container">
+            <div class="section-header">
+                <span class="section-tag">Engineering Problems</span>
+                <h2 class="section-title">Architectural Challenges</h2>
+            </div>
+            
+            <div class="challenges-grid">
+                <!-- Challenge 1 -->
+                <div class="glass-card challenge-card">
+                    <div class="challenge-header">
+                        <i class="fa-solid fa-triangle-exclamation"></i>
+                        <h4>Monolithic Session Bottlenecks</h4>
+                    </div>
+                    <div class="challenge-block">
+                        <h5>Problem</h5>
+                        <p>Local Flask session state prevented horizontal application scaling across multiple EC2 server targets.</p>
+                    </div>
+                    <div class="challenge-block">
+                        <h5>Solution</h5>
+                        <p>Offloaded session storage to a centralized DynamoDB table using TTL variables to clean up expired sessions.</p>
+                    </div>
+                    <div class="challenge-block">
+                        <h5>Outcome</h5>
+                        <p>Achieved completely stateless application servers, enabling containerized horizontal auto-scaling.</p>
+                    </div>
+                    <div class="outcome-badge-row">
+                        <i class="fa-solid fa-circle-check"></i> Stateless App Server Migrated
+                    </div>
+                </div>
+                
+                <!-- Challenge 2 -->
+                <div class="glass-card challenge-card">
+                    <div class="challenge-header">
+                        <i class="fa-solid fa-triangle-exclamation"></i>
+                        <h4>AI Inference Latency</h4>
+                    </div>
+                    <div class="challenge-block">
+                        <h5>Problem</h5>
+                        <p>Evaluating five ML models synchronously during checkout caused slow booking confirmations.</p>
+                    </div>
+                    <div class="challenge-block">
+                        <h5>Solution</h5>
+                        <p>Migrated high-latency risk calculations to background worker processes triggered asynchronously.</p>
+                    </div>
+                    <div class="challenge-block">
+                        <h5>Outcome</h5>
+                        <p>Reduced critical API response time from 1.5 seconds down to single-digit millisecond latency.</p>
+                    </div>
+                    <div class="outcome-badge-row">
+                        <i class="fa-solid fa-circle-check"></i> Non-Blocking Flow Achieved
+                    </div>
+                </div>
+                
+                <!-- Challenge 3 -->
+                <div class="glass-card challenge-card">
+                    <div class="challenge-header">
+                        <i class="fa-solid fa-triangle-exclamation"></i>
+                        <h4>Security Credentials Exposure</h4>
+                    </div>
+                    <div class="challenge-block">
+                        <h5>Problem</h5>
+                        <p>Developers committing hardcoded IAM API credentials to public repositories created severe security risks.</p>
+                    </div>
+                    <div class="challenge-block">
+                        <h5>Solution</h5>
+                        <p>Replaced secret keys with IAM Role Profiles attached to the EC2 instances, generating STS temporary keys.</p>
+                    </div>
+                    <div class="challenge-block">
+                        <h5>Outcome</h5>
+                        <p>Eradicated credentials leakage, aligning application code with security industry standards.</p>
+                    </div>
+                    <div class="outcome-badge-row">
+                        <i class="fa-solid fa-circle-check"></i> STS Role Permissions Integrated
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ========== RESULTS & METRICS ========== -->
+    <section id="results" class="results-section-wrapper reveal">
+        <div class="container">
+            <div class="section-header">
+                <span class="section-tag">Performance Gains</span>
+                <h2 class="section-title">Measurable Outcomes</h2>
+            </div>
+            
+            <div class="results-grid">
+                <!-- Speed -->
+                <div class="glass-card result-card">
+                    <div class="result-icon"><i class="fa-solid fa-gauge-high"></i></div>
+                    <div class="result-info">
+                        <h4>Inference Speed</h4>
+                        <p>Decoupled AI processing reduces checkout delays, boosting page load metrics by 75%.</p>
+                    </div>
+                </div>
+                
+                <!-- Security -->
+                <div class="glass-card result-card">
+                    <div class="result-icon"><i class="fa-solid fa-shield-halved"></i></div>
+                    <div class="result-info">
+                        <h4>Security Posture</h4>
+                        <p>Deploying IAM role configurations prevents credential theft, securing application databases.</p>
+                    </div>
+                </div>
+                
+                <!-- Scalability -->
+                <div class="glass-card result-card">
+                    <div class="result-icon"><i class="fa-solid fa-arrow-up-right-dots"></i></div>
+                    <div class="result-info">
+                        <h4>App Scalability</h4>
+                        <p>Stateless architecture offloading records to DynamoDB enables horizontal capacity scaling.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quantitative Counters -->
+            <div class="metrics-grid">
+                <!-- Metric 1 -->
+                <div class="glass-card metric-card-inner">
+                    <span class="metric-number" data-target="4">4</span>
+                    <span class="metric-title">Months Dev</span>
+                    <span class="metric-subtitle">Design to Deployment</span>
+                </div>
+                <!-- Metric 2 -->
+                <div class="glass-card metric-card-inner">
+                    <span class="metric-number" data-target="10">10</span>
+                    <span class="metric-title">AWS Services</span>
+                    <span class="metric-subtitle">Fully Integrated</span>
+                </div>
+                <!-- Metric 3 -->
+                <div class="glass-card metric-card-inner">
+                    <span class="metric-number" data-target="99">99.9</span>
+                    <span class="metric-title">Target Uptime</span>
+                    <span class="metric-subtitle">Through Multi-AZ RDS</span>
+                </div>
+                <!-- Metric 4 -->
+                <div class="glass-card metric-card-inner">
+                    <span class="metric-number" data-target="98">98%</span>
+                    <span class="metric-title">Accuracy Rate</span>
+                    <span class="metric-subtitle">AI Fraud Models</span>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ========== SKILLS DEMONSTRATED ========== -->
+    <section id="skills" class="reveal">
+        <div class="container">
+            <div class="section-header">
+                <span class="section-tag">Competencies</span>
+                <h2 class="section-title">Skills Demonstrated</h2>
+            </div>
+            
+            <div style="display: flex; flex-wrap: wrap; gap: 1rem; justify-content: center; max-width: 800px; margin: 0 auto;">
+                <span class="badge badge-aws" style="padding: 0.6rem 1.25rem; font-size: 0.9rem;"><i class="fa-solid fa-cloud"></i> Cloud Computing</span>
+                <span class="badge badge-aws" style="padding: 0.6rem 1.25rem; font-size: 0.9rem;"><i class="fa-brands fa-aws"></i> AWS Cloud Architectures</span>
+                <span class="badge" style="padding: 0.6rem 1.25rem; font-size: 0.9rem;"><i class="fa-brands fa-linux"></i> Linux Administration</span>
+                <span class="badge" style="padding: 0.6rem 1.25rem; font-size: 0.9rem;"><i class="fa-brands fa-docker"></i> Docker Containers</span>
+                <span class="badge" style="padding: 0.6rem 1.25rem; font-size: 0.9rem;"><i class="fa-brands fa-git-alt"></i> Git Versioning</span>
+                <span class="badge" style="padding: 0.6rem 1.25rem; font-size: 0.9rem;"><i class="fa-solid fa-infinity"></i> CI/CD Pipelines</span>
+                <span class="badge badge-blue" style="padding: 0.6rem 1.25rem; font-size: 0.9rem;"><i class="fa-solid fa-network-wired"></i> VPC Networking</span>
+                <span class="badge badge-blue" style="padding: 0.6rem 1.25rem; font-size: 0.9rem;"><i class="fa-brands fa-python"></i> Python Backend Programming</span>
+                <span class="badge" style="padding: 0.6rem 1.25rem; font-size: 0.9rem;"><i class="fa-solid fa-database"></i> SQL Relational Databases</span>
+                <span class="badge" style="padding: 0.6rem 1.25rem; font-size: 0.9rem;"><i class="fa-brands fa-js"></i> JavaScript UI Logic</span>
+                <span class="badge" style="padding: 0.6rem 1.25rem; font-size: 0.9rem;"><i class="fa-solid fa-lightbulb"></i> Complex Problem Solving</span>
+            </div>
+        </div>
+    </section>
+
+    <!-- ========== FUTURE IMPROVEMENTS (ROADMAP) ========== -->
+    <section id="roadmap" class="reveal">
+        <div class="container">
+            <div class="section-header">
+                <span class="section-tag">Architecture Roadmap</span>
+                <h2 class="section-title">Future System Improvements</h2>
+            </div>
+            
+            <div class="roadmap-timeline-grid">
+                <!-- Containerization -->
+                <div class="glass-card roadmap-card">
+                    <span class="roadmap-phase">Phase 1</span>
+                    <h4 class="roadmap-card-title">Dockerization &amp; Dev Environments</h4>
+                    <ul class="roadmap-list">
+                        <li>Containerize the Flask application server utilizing lightweight Docker base images.</li>
+                        <li>Create a LocalStack mock environment to test DynamoDB and SNS locally.</li>
+                    </ul>
+                </div>
+                
+                <!-- Infrastructure as Code -->
+                <div class="glass-card roadmap-card">
+                    <span class="roadmap-phase">Phase 2</span>
+                    <h4 class="roadmap-card-title">Infrastructure as Code (IaC)</h4>
+                    <ul class="roadmap-list">
+                        <li>Convert the manual AWS console infrastructure configurations into declarative Terraform files.</li>
+                        <li>Implement a GitHub Actions CI/CD script executing Terraform validation builds automatically.</li>
+                    </ul>
+                </div>
+                
+                <!-- Orchestration -->
+                <div class="glass-card roadmap-card phase-future">
+                    <span class="roadmap-phase">Phase 3</span>
+                    <h4 class="roadmap-card-title">Orchestration &amp; Scaling</h4>
+                    <ul class="roadmap-list">
+                        <li>Migrate the host compute node into an Elastic Kubernetes Service (EKS) cluster.</li>
+                        <li>Implement CPU-targeted auto-scaling metrics backed by an Elastic Load Balancer (ELB).</li>
+                    </ul>
+                </div>
+                
+                <!-- Caching & Microservices -->
+                <div class="glass-card roadmap-card phase-future">
+                    <span class="roadmap-phase">Phase 4</span>
+                    <h4 class="roadmap-card-title">Caching &amp; Edge Delivery</h4>
+                    <ul class="roadmap-list">
+                        <li>Integrate an ElastiCache Redis cluster to cache frequent DB queries.</li>
+                        <li>Carve out the ML pricing and fraud modules into isolated AWS ECS microservices.</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ========== RECRUITER SUMMARY (WHY THIS PROJECT MATTERS) ========== -->
+    <section id="summary" class="reveal">
+        <div class="container">
+            <div class="glass-card recruiter-summary-card">
+                <h3 class="recruiter-title">
+                    <i class="fa-solid fa-graduation-cap"></i> Recruiter Summary: Why This Project Matters
+                </h3>
+                <ul class="recruiter-bullets">
+                    <li class="recruiter-bullet-item">
+                        <h4>Demonstrates Production AWS Expertise</h4>
+                        <p>Leveraged 10 integrated AWS components (EC2, S3, RDS, DynamoDB, SNS, SQS, IAM, Cognito, CloudWatch, VPC) instead of simple database designs, matching real-world enterprise architectures.</p>
+                    </li>
+                    <li class="recruiter-bullet-item">
+                        <h4>Security First Devsecops Design</h4>
+                        <p>Eradicated credentials vulnerabilities by using strict AWS IAM roles and Cognito MFA user access, validating modern enterprise security compliance capabilities.</p>
+                    </li>
+                    <li class="recruiter-bullet-item">
+                        <h4>Stateless App Re-architecture</h4>
+                        <p>Offloaded local file caches to S3 and shifted sessions/conversations to DynamoDB, preparing the system for high-availability auto-scaling configurations.</p>
+                    </li>
+                    <li class="recruiter-bullet-item">
+                        <h4>Advanced Asynchronous Integration</h4>
+                        <p>Decoupled high-latency notifications and processing pipelines utilizing Amazon SQS and SNS publishers to guarantee zero booking checkout stalls.</p>
+                    </li>
+                    <li class="recruiter-bullet-item">
+                        <h4>Predictive Business Operations</h4>
+                        <p>Integrated 5 active machine learning models alongside traditional Flask routes to automate dynamic pricing, forecast demands, and verify transactions securely.</p>
+                    </li>
+                    <li class="recruiter-bullet-item">
+                        <h4>Full Lifecycle Competency</h4>
+                        <p>Demonstrates full lifecycle ownership spanning requirements mapping, local database modeling, cloud migration, and setting up CloudWatch metric alarms.</p>
+                    </li>
+                    <li class="recruiter-bullet-item">
+                        <h4>DevOps Ready Foundations</h4>
+                        <p>The re-architected stateless code pattern facilitates smooth migrations to Terraform infrastructure scripts and containerized Kubernetes clusters.</p>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </section>
+
+    <!-- ========== FOOTER & CTA ========== -->
+    <footer class="footer-cta">
+        <div class="container">
+            <h3 class="footer-title">Let's Connect on Your Next Project</h3>
+            <div class="footer-social-links">
+                <a href="https://github.com" target="_blank" class="footer-link-btn">
+                    <i class="fa-brands fa-github"></i> GitHub Repository
+                </a>
+                <a href="#" target="_blank" class="footer-link-btn">
+                    <i class="fa-solid fa-bolt"></i> Live Project Demo
+                </a>
+                <a href="#" target="_blank" class="footer-link-btn">
+                    <i class="fa-solid fa-file-lines"></i> Documentation
+                </a>
+                <a href="#architecture" class="footer-link-btn">
+                    <i class="fa-solid fa-diagram-project"></i> Architecture Diagram
+                </a>
+                <a href="#" target="_blank" class="footer-link-btn">
+                    <i class="fa-solid fa-circle-play"></i> Walkthrough Video
+                </a>
+            </div>
+            <p class="footer-credits">
+                Designed for Developer Portfolios • Built with Glassmorphism, AWS Colors, and Vanilla CSS • &copy; 2026.
+            </p>
+        </div>
+    </footer>
+
+    <!-- ==========================================================================
+       19. SCROLL ANIMATION & INTERACTIVE DIAGRAM JS
+       ========================================================================== -->
+    <script>
+        // Reveal elements on scroll
+        const revealElements = document.querySelectorAll('.reveal');
+        const revealOnScroll = () => {
+            const triggerBottom = window.innerHeight * 0.85;
+            revealElements.forEach(el => {
+                const elTop = el.getBoundingClientRect().top;
+                if (elTop < triggerBottom) {
+                    el.classList.add('active');
+                }
+            });
+        };
+        window.addEventListener('scroll', revealOnScroll);
+        window.addEventListener('load', revealOnScroll);
+
+        // Architecture panel text dictionary
+        const archData = {
+            internet: {
+                title: "🌐 Public Client Subnet Gateway",
+                desc: "Represents secure entry traffic. Inbound HTTP/HTTPS requests land on Nginx running on the public-facing EC2 node after routing through the AWS Internet Gateway and security group filtering checks."
+            },
+            sg: {
+                title: "🛡️ AWS Security Group (Stateful Firewall)",
+                desc: "Acts as a virtual firewall for the EC2 compute instance. Configured strictly to allow incoming traffic on Port 80 (HTTP) and Port 443 (HTTPS) from any location, and Port 22 (SSH) locked to the developer's IP address."
+            },
+            ec2: {
+                title: "🖥️ Amazon EC2 Compute Instance",
+                desc: "Runs the Flask app inside an Ubuntu instance. Reverse-proxied using Nginx to feed incoming queries into Gunicorn socket workers. Operates the 5 ML models (recommendation, fraud scores, sentiment models, dynamic pricing logic) side-by-side on the CPU."
+            },
+            rds: {
+                title: "🗃️ Amazon RDS PostgreSQL DB Layer",
+                desc: "Relational database node hosting users, room items, payment states, and audit trails. Housed in a private subnet, accessible only by the EC2 host via local database sockets, protecting client records from external scans."
+            },
+            ddb: {
+                title: "⚡ Amazon DynamoDB NoSQL Session & Log Store",
+                desc: "Managed key-value store hosting active user sessions, session validation lists, and logs from the AI concierge chat history. Features a 30-day auto-TTL rule to clean up expired data without CPU costs."
+            },
+            s3: {
+                title: "🪣 Amazon S3 Distributed Media Bucket",
+                desc: "Durable storage hosting guest upload profile images, room photo galleries, and generated PDF transaction files. Outfitted with IAM access policies and presigned URL loaders to feed elements safely on request."
+            },
+            cognito: {
+                title: "🔐 Amazon Cognito Identity Pool Auth",
+                desc: "Delegates password verifications, user signups, credentials encryption, and multi-factor logins. Validates security using JSON Web Tokens (JWT) verified on route entry flags."
+            },
+            sns: {
+                title: "📣 Amazon SNS Messaging Topic Hub",
+                desc: "Asynchronous publisher pushing checkout confirmations to customer channels and high-severity fraud attempt emails directly to administrative screens upon ML detection flag triggers."
+            },
+            cw: {
+                title: "📊 Amazon CloudWatch Log & Resource Monitor",
+                desc: "Tracks compute CPU cycles and memory. Set up with CloudWatch Agent to feed Nginx server audit logs directly into cloud records, triggering automated alarms if compute constraints peak."
+            },
+            lambda: {
+                title: "λ AWS Lambda Asynchronous PDF Worker",
+                desc: "Fires serverless tasks when triggered. Decoupled via SQS queue triggers to generate the PDF checkout invoices asynchronously, offloading complex doc compiling tasks from the main thread."
+            }
+        };
+
+        // Interactive node click handler
+        const showArchInfo = (nodeId) => {
+            const info = archData[nodeId];
+            if (info) {
+                const titleEl = document.getElementById('archPanelTitle');
+                const descEl = document.getElementById('archPanelDesc');
+                const panelEl = document.getElementById('archPanel');
+
+                titleEl.innerHTML = info.title;
+                descEl.innerHTML = info.desc;
+                
+                // Add high glow effect briefly
+                panelEl.style.boxShadow = "0 0 20px var(--aws-orange)";
+                setTimeout(() => {
+                    panelEl.style.boxShadow = "none";
+                }, 800);
+            }
+        };
+
+        // Highlight nav links on scroll
+        const sections = document.querySelectorAll('section[id]');
+        window.addEventListener('scroll', () => {
+            let scrollY = window.pageYOffset;
+            sections.forEach(current => {
+                const sectionHeight = current.offsetHeight;
+                const sectionTop = current.offsetTop - 120;
+                const sectionId = current.getAttribute('id');
+                const navLink = document.querySelector(`.nav-links a[href*=${sectionId}]`);
+                
+                if (navLink) {
+                    if (scrollY > sectionTop && scrollY <= sectionTop + sectionHeight) {
+                        document.querySelector('.nav-links a.active')?.classList.remove('active');
+                        navLink.classList.add('active');
+                    }
+                }
+            });
+        });
+    </script>
+</body>
+</html>

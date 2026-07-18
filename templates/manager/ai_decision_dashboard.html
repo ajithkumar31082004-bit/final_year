@@ -113,22 +113,22 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: #f8fafc; }
     <div class="kpi-grid">
       <div class="kpi-card red">
         <div class="kpi-icon">🔴</div>
-        <div class="kpi-value">{{ block_count }}</div>
+        <div class="kpi-value">{{ stats.block_count }}</div>
         <div class="kpi-label">Requires Block</div>
       </div>
       <div class="kpi-card amber">
         <div class="kpi-icon">🟡</div>
-        <div class="kpi-value">{{ review_count }}</div>
+        <div class="kpi-value">{{ stats.review_count }}</div>
         <div class="kpi-label">Needs Review</div>
       </div>
       <div class="kpi-card green">
         <div class="kpi-icon">🟢</div>
-        <div class="kpi-value">{{ safe_count }}</div>
+        <div class="kpi-value">{{ stats.safe_count }}</div>
         <div class="kpi-label">Safe Bookings</div>
       </div>
       <div class="kpi-card blue">
         <div class="kpi-icon">📊</div>
-        <div class="kpi-value">{{ total_suspicious }}</div>
+        <div class="kpi-value">{{ stats.total_suspicious }}</div>
         <div class="kpi-label">Total Suspicious</div>
       </div>
     </div>
@@ -142,7 +142,7 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: #f8fafc; }
         </div>
       </div>
 
-      {% if fraudulent_bookings %}
+      {% if bookings %}
         <div style="overflow-x: auto;">
           <table class="booking-table">
             <thead>
@@ -157,30 +157,33 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: #f8fafc; }
               </tr>
             </thead>
             <tbody>
-              {% for booking in fraudulent_bookings %}
+              {% for booking in bookings %}
               <tr>
                 <td>
-                  <span style="font-size: 1.2rem;">{{ booking.risk_level.emoji }}</span>
+                  <span style="font-size: 1.2rem;">{{ booking.risk_emoji }}</span>
                   <br>
-                  <span class="risk-badge risk-{% if booking.risk_level.level == 'HIGH' %}high{% elif booking.risk_level.level == 'MEDIUM' %}medium{% else %}low{% endif %}">
-                    {{ booking.risk_level.level }}
+                  <span class="risk-badge risk-{% if booking.risk_level == 'HIGH' %}high{% elif booking.risk_level == 'MEDIUM' %}medium{% else %}low{% endif %}">
+                    {{ booking.risk_level }}
                   </span>
                 </td>
                 <td><strong>{{ booking.first_name }} {{ booking.last_name }}</strong><br><small style="color: #94a3b8;">{{ booking.email or 'N/A' }}</small></td>
-                <td>{{ booking.room_type }}</td>
+                <td>{{ booking.room_type or 'N/A' }}</td>
                 <td><strong>₹{{ "%.0f"|format(booking.total_amount or 0) }}</strong></td>
                 <td><strong>{{ "%.0f"|format(booking.fraud_score or 0) }}%</strong></td>
                 <td>
                   <ul class="explanation-list">
-                    {% for reason in booking.fraud_explanations[:3] %}
+                    {% for reason in (booking.fraud_reasons or [])[:3] %}
                     <li>{{ reason }}</li>
                     {% endfor %}
+                    {% if not booking.fraud_reasons %}
+                    <li>{{ booking.recommendation }}</li>
+                    {% endif %}
                   </ul>
                 </td>
                 <td>
                   <div class="action-buttons">
                     <button class="btn-action btn-approve" onclick="fraudAction('{{ booking.booking_id }}', 'approve')">✓ Approve</button>
-                    <button class="btn-action btn-verify" onclick="fraudAction('{{ booking.booking_id }}', 'verify')">? Verify</button>
+                    <button class="btn-action btn-verify" onclick="fraudAction('{{ booking.booking_id }}', 'review')">? Review</button>
                     <button class="btn-action btn-block" onclick="fraudAction('{{ booking.booking_id }}', 'block')">✕ Block</button>
                   </div>
                 </td>
@@ -203,28 +206,29 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: #f8fafc; }
 
 <script>
 function fraudAction(bookingId, action) {
-  const actionLabels = { approve: 'Approve', verify: 'Verify', block: 'Block' };
-  const notes = prompt(`Enter notes for ${actionLabels[action]}:`);
+  const actionLabels = { approve: 'Approve', review: 'Review', block: 'Block' };
+  const notes = prompt('Enter notes for ' + actionLabels[action] + ':');
   if (notes === null) return;
-  
-  fetch(`/api/manager/fraud/${bookingId}/action`, {
+
+  const csrfToken = document.querySelector('input[name="csrf_token"]');
+  const headers = { 'Content-Type': 'application/json' };
+  if (csrfToken) headers['X-CSRFToken'] = csrfToken.value;
+
+  fetch('/api/manager/fraud/' + bookingId + '/action', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-CSRFToken': document.querySelector('[name=csrf_token]')?.value || ''
-    },
-    body: JSON.stringify({ action, notes })
+    headers: headers,
+    body: JSON.stringify({ action: action, notes: notes })
   })
-  .then(r => r.json())
-  .then(d => {
+  .then(function(r) { return r.json(); })
+  .then(function(d) {
     if (d.success) {
-      alert(d.message);
+      alert(d.message || 'Action completed successfully');
       location.reload();
     } else {
-      alert('Error: ' + (d.error || 'Unknown error'));
+      alert('Error: ' + (d.message || d.error || 'Unknown error'));
     }
   })
-  .catch(e => alert('Request failed: ' + e.message));
+  .catch(function(e) { alert('Request failed: ' + e.message); });
 }
 </script>
 

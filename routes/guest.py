@@ -277,6 +277,18 @@ def book_room_with_ai_decision(room_id):
             # If engine says BLOCK, reject immediately
             if ai_result["decision"] == "BLOCK":
                 flash("⚠️ Booking blocked by AI security engine. " + (ai_result["reasons"][0] if ai_result["reasons"] else ""), "danger")
+                try:
+                    from services.sns_service import send_fraud_alert
+                    import uuid
+                    temp_id = f"BLK-{uuid.uuid4().hex[:6].upper()}"
+                    send_fraud_alert(
+                        booking_id=temp_id,
+                        fraud_score=ai_result.get("fraud_score", 0),
+                        reason=ai_result["reasons"][0] if ai_result["reasons"] else "AI blocked",
+                        user_email=user.get("email", "")
+                    )
+                except Exception as e:
+                    current_app.logger.error(f"Failed to send fraud alert: {e}")
                 return redirect(url_for("guest.room_listing"))
 
             # Store compact summary in session for confirmation page

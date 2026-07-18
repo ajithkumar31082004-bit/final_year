@@ -77,15 +77,22 @@ def get_fraud_risk_level(fraud_score: float) -> dict:
         return {"level": "LOW", "emoji": "🟢", "color": "green"}
 
 
-def get_fraud_action_recommendation(fraud_result: dict) -> str:
+def get_fraud_action_recommendation(fraud_result) -> str:
     """
     Suggest action for manager based on fraud risk.
+    Accepts either a float (fraud score directly) or a dict from score_booking().
     
     Returns:
         "APPROVE" | "REVIEW" | "BLOCK"
     """
-    fraud_score = fraud_result.get("risk_score", 0)
-    
+    # Accept both float score and dict result
+    if isinstance(fraud_result, (int, float)):
+        fraud_score = float(fraud_result)
+    elif isinstance(fraud_result, dict):
+        fraud_score = float(fraud_result.get("risk_score", fraud_result.get("fraud_score", 0)) or 0)
+    else:
+        fraud_score = 0.0
+
     if fraud_score >= 60:
         return "BLOCK"
     elif fraud_score >= 35:
@@ -210,7 +217,7 @@ def get_demand_suggestions(demand_data: list) -> dict:
 # 4️⃣ RECOMMENDATION INSIGHTS
 # ═══════════════════════════════════════════════════════════════════════════
 
-def analyze_room_popularity(all_bookings: list) -> dict:
+def analyze_room_popularity(all_bookings: list = None) -> dict:
     """
     Analyze which rooms are most popular.
     
@@ -220,8 +227,18 @@ def analyze_room_popularity(all_bookings: list) -> dict:
             "least_booked": [...]
         }
     """
+    if all_bookings is None:
+        try:
+            from models.database import get_db
+            conn = get_db()
+            rows = conn.execute("SELECT room_type FROM bookings").fetchall()
+            conn.close()
+            all_bookings = [dict(r) for r in rows]
+        except Exception:
+            all_bookings = []
+
     room_counts = defaultdict(int)
-    
+
     for booking in all_bookings:
         room_type = booking.get("room_type")
         if room_type:
@@ -261,7 +278,7 @@ def analyze_room_popularity(all_bookings: list) -> dict:
     }
 
 
-def analyze_guest_preferences(all_bookings: list, all_users: list) -> dict:
+def analyze_guest_preferences(all_bookings: list = None, all_users: list = None) -> dict:
     """
     Analyze guest preferences by user tier/type.
     
@@ -274,10 +291,28 @@ def analyze_guest_preferences(all_bookings: list, all_users: list) -> dict:
             "insights": [str],
         }
     """
+    if all_bookings is None or all_users is None:
+        try:
+            from models.database import get_db
+            conn = get_db()
+            if all_bookings is None:
+                rows = conn.execute("SELECT user_id, room_type FROM bookings").fetchall()
+                all_bookings = [dict(r) for r in rows]
+            if all_users is None:
+                rows = conn.execute("SELECT user_id, tier_level FROM users").fetchall()
+                all_users = [dict(r) for r in rows]
+            conn.close()
+        except Exception:
+            all_bookings = all_bookings or []
+            all_users = all_users or []
+
     tier_rooms = defaultdict(lambda: defaultdict(int))
-    
-    # Map user ID to tier
-    user_tiers = {u.get("user_id"): u.get("loyalty_tier") for u in all_users}
+
+    # Map user ID to tier (support both tier_level and loyalty_tier column names)
+    user_tiers = {
+        u.get("user_id"): u.get("tier_level") or u.get("loyalty_tier")
+        for u in all_users
+    }
     
     for booking in all_bookings:
         user_id = booking.get("user_id")
@@ -309,7 +344,7 @@ def analyze_guest_preferences(all_bookings: list, all_users: list) -> dict:
     }
 
 
-def get_popular_amenities(all_bookings: list, all_rooms: list) -> dict:
+def get_popular_amenities(all_bookings: list = None, all_rooms: list = None) -> dict:
     """
     Extract popular amenities from room bookings.
     
@@ -319,10 +354,33 @@ def get_popular_amenities(all_bookings: list, all_rooms: list) -> dict:
             "insights": [str],
         }
     """
+    if all_bookings is None or all_rooms is None:
+        try:
+            from models.database import get_db
+            import json as _json
+            conn = get_db()
+            if all_bookings is None:
+                rows = conn.execute("SELECT room_id FROM bookings").fetchall()
+                all_bookings = [dict(r) for r in rows]
+            if all_rooms is None:
+                rows = conn.execute("SELECT room_id, amenities FROM rooms").fetchall()
+                all_rooms = [dict(r) for r in rows]
+            conn.close()
+        except Exception:
+            all_bookings = all_bookings or []
+            all_rooms = all_rooms or []
+
     # Map room_id to amenities
     room_amenities = {}
     for room in all_rooms:
-        amenities = room.get("amenities", "").split(",")
+        raw = room.get("amenities", "") or ""
+        # Support both JSON array and comma-separated string
+        try:
+            import json as _json
+            parsed = _json.loads(raw)
+            amenities = [str(a).strip() for a in parsed if str(a).strip()]
+        except Exception:
+            amenities = [a.strip() for a in raw.split(",") if a.strip()]
         room_amenities[room.get("room_id")] = [a.strip() for a in amenities if a.strip()]
     
     # Count amenity popularity

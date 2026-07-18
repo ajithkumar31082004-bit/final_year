@@ -55,6 +55,7 @@ def create_app(config_name="default"):
     from routes.superadmin import superadmin_bp
     from routes.agent import agent_bp
     from routes.chatbot import chatbot_bp
+    from routes.ai_decision import ai_decision_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(guest_bp)
@@ -64,6 +65,7 @@ def create_app(config_name="default"):
     app.register_blueprint(superadmin_bp)
     app.register_blueprint(agent_bp)
     app.register_blueprint(chatbot_bp)
+    app.register_blueprint(ai_decision_bp)
 
     # DB teardown
     from models.database import close_db
@@ -228,6 +230,10 @@ def create_app(config_name="default"):
     @app.route("/contact")
     def contact():
         return render_template("public/contact.html")
+
+    @app.route("/showcase")
+    def showcase():
+        return render_template("public/showcase.html")
 
     @app.route("/offers")
     def offers():
