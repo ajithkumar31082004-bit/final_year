@@ -24,6 +24,7 @@ from services.email_service import send_booking_confirmation, send_cancellation_
 from services.refund_policy import calculate_refund_pct
 from services.pdf_service import generate_gst_invoice, generate_booking_qr
 from services.payment_service import create_order, verify_payment, RAZORPAY_KEY_ID
+from services.lambda_service import trigger_booking_notification
 
 guest_bp = Blueprint("guest", __name__)
 
@@ -532,11 +533,41 @@ def verify_payment_api():
                payment_id = ?,
                razorpay_order_id = ?,
                updated_at = ?
-           WHERE booking_id = ?""",
+           WHERE booking_id = """
+        + "?",
         (payment_id, order_id, datetime.now().isoformat(), booking_id),
     )
     conn.commit()
+
+    # ── Fetch full booking + room info for Lambda payload ────────────────────
+    full_booking = conn.execute(
+        """SELECT b.booking_id, b.check_in, b.check_out, b.total_amount,
+                  r.room_number, r.room_type
+           FROM bookings b
+           JOIN rooms r ON b.room_id = r.room_id
+           WHERE b.booking_id = ?""",
+        (booking_id,)
+    ).fetchone()
     conn.close()
+
+    # ── Fire Lambda trigger (async — non-blocking) ───────────────────────────
+    try:
+        if full_booking:
+            fb = dict(full_booking)
+            trigger_booking_notification(
+                booking_id   = booking_id,
+                guest_name   = f"{user.get('first_name', '')} {user.get('last_name', '')}".strip(),
+                guest_email  = user.get('email', ''),
+                room_number  = fb.get('room_number', ''),
+                room_type    = fb.get('room_type', ''),
+                check_in     = fb.get('check_in', ''),
+                check_out    = fb.get('check_out', ''),
+                total_amount = fb.get('total_amount', 0),
+                payment_id   = payment_id,
+            )
+    except Exception as _le:
+        # Lambda trigger must never break the payment confirmation flow
+        current_app.logger.warning(f"[LAMBDA] Trigger failed (non-fatal): {_le}")
 
     return jsonify({"success": True})
 
