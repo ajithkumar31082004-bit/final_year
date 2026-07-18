@@ -24,7 +24,8 @@ from services.email_service import send_booking_confirmation, send_cancellation_
 from services.refund_policy import calculate_refund_pct
 from services.pdf_service import generate_gst_invoice, generate_booking_qr
 from services.payment_service import create_order, verify_payment, RAZORPAY_KEY_ID
-from services.lambda_service import trigger_booking_notification
+from services.lambda_service import trigger_booking_notification, trigger_booking_storage
+from services.s3_service import upload_invoice as s3_upload_invoice
 
 guest_bp = Blueprint("guest", __name__)
 
@@ -539,9 +540,11 @@ def verify_payment_api():
     )
     conn.commit()
 
-    # ── Fetch full booking + room info for Lambda payload ────────────────────
+    # ── Fetch full booking + room + user for Lambda payloads ─────────────────
     full_booking = conn.execute(
         """SELECT b.booking_id, b.check_in, b.check_out, b.total_amount,
+                  b.base_amount, b.gst_amount, b.discount_amount,
+                  b.num_guests, b.razorpay_order_id,
                   r.room_number, r.room_type
            FROM bookings b
            JOIN rooms r ON b.room_id = r.room_id
@@ -550,13 +553,37 @@ def verify_payment_api():
     ).fetchone()
     conn.close()
 
-    # ── Fire Lambda trigger (async — non-blocking) ───────────────────────────
-    try:
-        if full_booking:
-            fb = dict(full_booking)
+    invoice_s3_url = ""
+    invoice_s3_key = ""
+
+    if full_booking:
+        fb = dict(full_booking)
+        guest_name = f"{user.get('first_name', '')} {user.get('last_name', '')}".strip()
+
+        # ── Step A: Generate PDF invoice locally ─────────────────────────────
+        try:
+            invoice_local_path = generate_gst_invoice(
+                booking_data=fb,
+                user_data=dict(user)
+            )
+        except Exception as _ie:
+            current_app.logger.warning(f"[INVOICE] PDF generation failed: {_ie}")
+            invoice_local_path = None
+
+        # ── Step B: Upload invoice PDF to S3 ─────────────────────────────────
+        if invoice_local_path:
+            try:
+                invoice_s3_key = f"invoices/{booking_id}.pdf"
+                invoice_s3_url = s3_upload_invoice(invoice_local_path, booking_id)
+                current_app.logger.info(f"[S3] Invoice uploaded: {invoice_s3_url}")
+            except Exception as _s3e:
+                current_app.logger.warning(f"[S3] Invoice upload failed (non-fatal): {_s3e}")
+
+        # ── Step C: Fire NOTIFY Lambda (SNS email to guest + admin) ──────────
+        try:
             trigger_booking_notification(
                 booking_id   = booking_id,
-                guest_name   = f"{user.get('first_name', '')} {user.get('last_name', '')}".strip(),
+                guest_name   = guest_name,
                 guest_email  = user.get('email', ''),
                 room_number  = fb.get('room_number', ''),
                 room_type    = fb.get('room_type', ''),
@@ -565,9 +592,28 @@ def verify_payment_api():
                 total_amount = fb.get('total_amount', 0),
                 payment_id   = payment_id,
             )
-    except Exception as _le:
-        # Lambda trigger must never break the payment confirmation flow
-        current_app.logger.warning(f"[LAMBDA] Trigger failed (non-fatal): {_le}")
+        except Exception as _le:
+            current_app.logger.warning(f"[LAMBDA:notify] Trigger failed (non-fatal): {_le}")
+
+        # ── Step D: Fire STORAGE Lambda (DynamoDB + S3 URL record) ───────────
+        try:
+            trigger_booking_storage(
+                booking_id     = booking_id,
+                order_id       = order_id,
+                payment_id     = payment_id,
+                guest_name     = guest_name,
+                guest_email    = user.get('email', ''),
+                room_number    = fb.get('room_number', ''),
+                room_type      = fb.get('room_type', ''),
+                check_in       = fb.get('check_in', ''),
+                check_out      = fb.get('check_out', ''),
+                total_amount   = fb.get('total_amount', 0),
+                invoice_s3_url = invoice_s3_url,
+                invoice_s3_key = invoice_s3_key,
+                num_guests     = fb.get('num_guests', 1),
+            )
+        except Exception as _se:
+            current_app.logger.warning(f"[LAMBDA:storage] Trigger failed (non-fatal): {_se}")
 
     return jsonify({"success": True})
 
