@@ -21,6 +21,29 @@ USE_MYSQL = bool(DATABASE_URL) or bool(os.environ.get("MYSQL_HOST"))
 DATABASE_PATH = os.environ.get("DATABASE_PATH", "blissful_abodes.db")
 
 
+class _RowProxy:
+    def __init__(self, data_dict):
+        self._dict = data_dict
+        self._tuple = tuple(data_dict.values()) if data_dict else ()
+
+    def __getitem__(self, key):
+        if isinstance(key, int):
+            return self._tuple[key]
+        return self._dict[key]
+
+    def keys(self):
+        return self._dict.keys()
+
+    def values(self):
+        return self._tuple
+
+    def __repr__(self):
+        return repr(self._dict)
+
+    def __len__(self):
+        return len(self._tuple)
+
+
 class _CursorProxy:
     def __init__(self, cursor):
         self._cursor = cursor
@@ -30,11 +53,30 @@ class _CursorProxy:
             sql = sql.replace('?', '%s')
         return self._cursor.execute(sql, *args, **kwargs)
         
+    def fetchone(self):
+        row = self._cursor.fetchone()
+        if row is not None:
+            return _RowProxy(row)
+        return None
+
+    def fetchall(self):
+        rows = self._cursor.fetchall()
+        if rows is not None:
+            return [_RowProxy(r) for r in rows]
+        return []
+
+    def fetchmany(self, size=None):
+        rows = self._cursor.fetchmany(size) if size is not None else self._cursor.fetchmany()
+        if rows is not None:
+            return [_RowProxy(r) for r in rows]
+        return []
+
     def __getattr__(self, name):
         return getattr(self._cursor, name)
 
     def __iter__(self):
-        return iter(self._cursor)
+        for row in self._cursor:
+            yield _RowProxy(row)
 
 
 class _ConnectionProxy:
