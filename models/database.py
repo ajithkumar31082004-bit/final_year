@@ -21,13 +21,45 @@ USE_MYSQL = bool(DATABASE_URL) or bool(os.environ.get("MYSQL_HOST"))
 DATABASE_PATH = os.environ.get("DATABASE_PATH", "blissful_abodes.db")
 
 
+class _CursorProxy:
+    def __init__(self, cursor):
+        self._cursor = cursor
+        
+    def execute(self, sql, *args, **kwargs):
+        if isinstance(sql, str):
+            sql = sql.replace('?', '%s')
+        return self._cursor.execute(sql, *args, **kwargs)
+        
+    def __getattr__(self, name):
+        return getattr(self._cursor, name)
+
+    def __iter__(self):
+        return iter(self._cursor)
+
+
 class _ConnectionProxy:
     def __init__(self, conn):
         self._conn = conn
 
+    def cursor(self, *args, **kwargs):
+        cursor = self._conn.cursor(*args, **kwargs)
+        if USE_MYSQL:
+            return _CursorProxy(cursor)
+        return cursor
+
+    def execute(self, sql, *args, **kwargs):
+        if USE_MYSQL:
+            if isinstance(sql, str):
+                sql = sql.replace('?', '%s')
+            cursor = self._conn.cursor()
+            cursor.execute(sql, *args, **kwargs)
+            return _CursorProxy(cursor)
+        else:
+            return self._conn.execute(sql, *args, **kwargs)
+
     def close(self):
-        # No-op: real close happens in close_db() teardown.
-        return None
+        if not has_app_context():
+            self._conn.close()
 
     def __getattr__(self, name):
         return getattr(self._conn, name)
@@ -48,12 +80,12 @@ def get_db():
         return _ConnectionProxy(conn)
 
     if USE_MYSQL:
-        return _get_mysql_connection()
+        return _ConnectionProxy(_get_mysql_connection())
     
     conn = sqlite3.connect(DATABASE_PATH)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
-    return conn
+    return _ConnectionProxy(conn)
 
 
 
