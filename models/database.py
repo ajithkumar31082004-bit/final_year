@@ -62,17 +62,61 @@ def _normalize_sql_for_mysql(sql: str) -> str:
     """Convert SQLite-style schema DDL to MySQL-compatible DDL when needed."""
     if not USE_MYSQL:
         return sql
+    
+    import re
+    
+    # 1. Replace autoincrement
+    sql = sql.replace('INTEGER PRIMARY KEY AUTOINCREMENT', 'INT PRIMARY KEY AUTO_INCREMENT')
+    
+    # 2. Convert standard SQLite TEXT columns to VARCHAR to support indexing and foreign keys in MySQL.
+    large_text_cols = {
+        'description', 'comment', 'special_requests', 'details', 
+        'notes', 'content', 'preferences', 'amenities', 'images', 
+        'photos', 'fraud_flags', 'staff_response'
+    }
+    
+    def replace_col(match):
+        col_name = match.group(1)
+        rest = match.group(2)
+        
+        # If the column name is in the whitelist, keep it as TEXT
+        if col_name.lower() in large_text_cols:
+            return f"{col_name} TEXT{rest}"
+            
+        # Determine the varchar length (128 for keys/IDs, 255 for others)
+        length = 128 if ('PRIMARY KEY' in rest.upper() or 
+                         'user_id' in col_name.lower() or 
+                         'room_id' in col_name.lower() or 
+                         'booking_id' in col_name.lower() or
+                         'room_number' in col_name.lower() or
+                         'code' in col_name.lower()) else 255
+        
+        # Map DEFAULT CURRENT_TIMESTAMP to DATETIME
+        if 'DEFAULT CURRENT_TIMESTAMP' in rest.upper():
+            return f"{col_name} DATETIME{rest}"
+            
+        return f"{col_name} VARCHAR({length}){rest}"
+
+    # Match column definitions: "col_name TEXT ..."
+    sql = re.sub(
+        r'\b(?!FOREIGN\b|PRIMARY\b|UNIQUE\b|KEY\b|CHECK\b)([a-zA-Z_][a-zA-Z0-9_]*)\s+TEXT\b(.*?)(?=,|\r?\n|\))',
+        replace_col,
+        sql,
+        flags=re.IGNORECASE
+    )
+    
+    # 3. Fallback standard replacements
     replacements = [
-        ('TEXT PRIMARY KEY', 'VARCHAR(128) PRIMARY KEY'),
         ('TEXT UNIQUE NOT NULL', 'VARCHAR(255) UNIQUE NOT NULL'),
+        ('TEXT PRIMARY KEY', 'VARCHAR(128) PRIMARY KEY'),
         ('TEXT NOT NULL DEFAULT', 'VARCHAR(255) NOT NULL DEFAULT'),
         ('TEXT DEFAULT CURRENT_TIMESTAMP', 'DATETIME DEFAULT CURRENT_TIMESTAMP'),
         ('TEXT DEFAULT "', 'VARCHAR(255) DEFAULT "'),
-        ("TEXT DEFAULT '", "VARCHAR(255) DEFAULT '") ,
-        ('INTEGER PRIMARY KEY AUTOINCREMENT', 'INT PRIMARY KEY AUTO_INCREMENT'),
+        ("TEXT DEFAULT '", "VARCHAR(255) DEFAULT '")
     ]
     for old, new in replacements:
         sql = sql.replace(old, new)
+        
     return sql
 
 
