@@ -17,7 +17,7 @@ except ImportError:
 
 # Determine database type
 DATABASE_URL = os.environ.get("DATABASE_URL") or os.environ.get("MYSQL_PUBLIC_URL")
-USE_MYSQL = bool(DATABASE_URL)
+USE_MYSQL = bool(DATABASE_URL) or bool(os.environ.get("MYSQL_HOST"))
 DATABASE_PATH = os.environ.get("DATABASE_PATH", "blissful_abodes.db")
 
 
