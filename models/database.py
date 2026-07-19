@@ -34,13 +34,15 @@ def _translate_sql(sql: str) -> str:
     # 3. strftime('%Y-%m', col) -> DATE_FORMAT(col, '%Y-%m')
     #    Must escape % chars so pymysql doesn't interpret them
     def _repl_strftime(m):
-        fmt = m.group(1)  # e.g. '%Y-%m'
-        col = m.group(2)  # e.g. created_at
+        fmt = m.group(1).strip("'").strip('"') # e.g. %Y-%m
+        col = m.group(2).strip()  # e.g. created_at
+        if fmt == '%Y':
+            return f"YEAR({col})"
         # Replace % with %% so pymysql treats them as literals
         mysql_fmt = fmt.replace('%', '%%')
-        return f"DATE_FORMAT({col}, {mysql_fmt})"
+        return f"DATE_FORMAT({col}, '{mysql_fmt}')"
     sql = re.sub(
-        r"strftime\(('[^']*'|\"[^\"]*\"),\s*([^)]+)\)",
+        r"strftime\(\s*('[^']*'|\"[^\"]*\")\s*,\s*([^)]+?)\s*\)",
         _repl_strftime,
         sql,
         flags=re.IGNORECASE
@@ -61,6 +63,8 @@ def _translate_sql(sql: str) -> str:
     )
     # 5. date('now') -> CURDATE()
     sql = re.sub(r"date\('now'\)", 'CURDATE()', sql, flags=re.IGNORECASE)
+    # 6. date(col) -> DATE(col)
+    sql = re.sub(r"date\(([^'n][^)]*)\)", r"DATE(\1)", sql, flags=re.IGNORECASE)
     return sql
 
 
