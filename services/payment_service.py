@@ -10,7 +10,7 @@ import hashlib
 
 RAZORPAY_KEY_ID = os.environ.get("RAZORPAY_KEY_ID", "rzp_test_placeholder")
 RAZORPAY_KEY_SECRET = os.environ.get("RAZORPAY_KEY_SECRET", "placeholder_secret")
-DEMO_MODE = os.environ.get("DEMO_MODE", "0").strip().lower() in {"1", "true", "yes"}
+DEMO_MODE = os.environ.get("DEMO_MODE", "1").strip().lower() in {"1", "true", "yes"}
 
 
 def _is_demo_mode():
