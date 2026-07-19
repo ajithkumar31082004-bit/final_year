@@ -51,6 +51,11 @@ class _CursorProxy:
     def execute(self, sql, *args, **kwargs):
         if isinstance(sql, str):
             sql = sql.replace('?', '%s')
+            # Translate SQLite specific INSERT OR IGNORE/REPLACE to MySQL
+            sql = sql.replace('INSERT OR IGNORE', 'INSERT IGNORE')
+            sql = sql.replace('insert or ignore', 'insert ignore')
+            sql = sql.replace('INSERT OR REPLACE', 'REPLACE')
+            sql = sql.replace('insert or replace', 'replace')
         return self._cursor.execute(sql, *args, **kwargs)
         
     def fetchone(self):
@@ -93,6 +98,11 @@ class _ConnectionProxy:
         if USE_MYSQL:
             if isinstance(sql, str):
                 sql = sql.replace('?', '%s')
+                # Translate SQLite specific INSERT OR IGNORE/REPLACE to MySQL
+                sql = sql.replace('INSERT OR IGNORE', 'INSERT IGNORE')
+                sql = sql.replace('insert or ignore', 'insert ignore')
+                sql = sql.replace('INSERT OR REPLACE', 'REPLACE')
+                sql = sql.replace('insert or replace', 'replace')
             cursor = self._conn.cursor()
             cursor.execute(sql, *args, **kwargs)
             return _CursorProxy(cursor)
