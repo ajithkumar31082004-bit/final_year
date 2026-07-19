@@ -162,6 +162,19 @@ def close_db(error=None):
         conn.close()
 
 
+def _create_index(cursor, index_name: str, table_name: str, columns: str):
+    """Helper to create index safely on both SQLite and MySQL."""
+    if USE_MYSQL:
+        try:
+            cursor.execute(f"CREATE INDEX {index_name} ON {table_name}({columns})")
+        except Exception as e:
+            # Ignore Duplicate Key name error (1061) in MySQL
+            if "1061" not in str(e):
+                print(f"[DB] Index {index_name} info/error: {e}")
+    else:
+        cursor.execute(f"CREATE INDEX IF NOT EXISTS {index_name} ON {table_name}({columns})")
+
+
 def init_db():
     """Initialize all database tables"""
     conn = get_db()
@@ -504,19 +517,19 @@ def init_db():
     ))
 
     # Indexes for hot queries
-    cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)")
-    cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_role_active ON users(role, is_active)")
-    cursor.execute("CREATE INDEX IF NOT EXISTS idx_bookings_user ON bookings(user_id)")
-    cursor.execute("CREATE INDEX IF NOT EXISTS idx_bookings_status ON bookings(status)")
-    cursor.execute("CREATE INDEX IF NOT EXISTS idx_bookings_payment ON bookings(payment_status)")
-    cursor.execute("CREATE INDEX IF NOT EXISTS idx_bookings_created ON bookings(created_at)")
-    cursor.execute("CREATE INDEX IF NOT EXISTS idx_bookings_checkin ON bookings(check_in)")
-    cursor.execute("CREATE INDEX IF NOT EXISTS idx_rooms_status ON rooms(status)")
-    cursor.execute("CREATE INDEX IF NOT EXISTS idx_rooms_type ON rooms(room_type)")
-    cursor.execute("CREATE INDEX IF NOT EXISTS idx_notifications_user_read ON notifications(user_id, read_status)")
-    cursor.execute("CREATE INDEX IF NOT EXISTS idx_reviews_room ON reviews(room_id)")
-    cursor.execute("CREATE INDEX IF NOT EXISTS idx_reviews_user ON reviews(user_id)")
-    cursor.execute("CREATE INDEX IF NOT EXISTS idx_coupons_code ON coupons(code)")
+    _create_index(cursor, "idx_users_email", "users", "email")
+    _create_index(cursor, "idx_users_role_active", "users", "role, is_active")
+    _create_index(cursor, "idx_bookings_user", "bookings", "user_id")
+    _create_index(cursor, "idx_bookings_status", "bookings", "status")
+    _create_index(cursor, "idx_bookings_payment", "bookings", "payment_status")
+    _create_index(cursor, "idx_bookings_created", "bookings", "created_at")
+    _create_index(cursor, "idx_bookings_checkin", "bookings", "check_in")
+    _create_index(cursor, "idx_rooms_status", "rooms", "status")
+    _create_index(cursor, "idx_rooms_type", "rooms", "room_type")
+    _create_index(cursor, "idx_notifications_user_read", "notifications", "user_id, read_status")
+    _create_index(cursor, "idx_reviews_room", "reviews", "room_id")
+    _create_index(cursor, "idx_reviews_user", "reviews", "user_id")
+    _create_index(cursor, "idx_coupons_code", "coupons", "code")
 
     conn.commit()
     conn.close()
