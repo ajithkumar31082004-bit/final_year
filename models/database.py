@@ -21,6 +21,49 @@ USE_MYSQL = bool(DATABASE_URL) or bool(os.environ.get("MYSQL_HOST"))
 DATABASE_PATH = os.environ.get("DATABASE_PATH", "blissful_abodes.db")
 
 
+def _translate_sql(sql: str) -> str:
+    """Translate SQLite-specific SQL syntax to MySQL-compatible equivalents."""
+    import re
+    # 1. ? -> %s for parameterization
+    sql = sql.replace('?', '%s')
+    # 2. INSERT OR IGNORE / INSERT OR REPLACE
+    sql = sql.replace('INSERT OR IGNORE', 'INSERT IGNORE')
+    sql = sql.replace('insert or ignore', 'insert ignore')
+    sql = sql.replace('INSERT OR REPLACE', 'REPLACE')
+    sql = sql.replace('insert or replace', 'replace')
+    # 3. strftime('%Y-%m', col) -> DATE_FORMAT(col, '%Y-%m')
+    #    Must escape % chars so pymysql doesn't interpret them
+    def _repl_strftime(m):
+        fmt = m.group(1)  # e.g. '%Y-%m'
+        col = m.group(2)  # e.g. created_at
+        # Replace % with %% so pymysql treats them as literals
+        mysql_fmt = fmt.replace('%', '%%')
+        return f"DATE_FORMAT({col}, {mysql_fmt})"
+    sql = re.sub(
+        r"strftime\(('[^']*'|\"[^\"]*\"),\s*([^)]+)\)",
+        _repl_strftime,
+        sql,
+        flags=re.IGNORECASE
+    )
+    # 4. date('now', '+N days') -> DATE_ADD(NOW(), INTERVAL N DAY)
+    def _repl_date_offset(m):
+        sign = '+' if '+' in m.group(1) else '-'
+        num = re.search(r'\d+', m.group(1)).group()
+        unit = 'DAY' if 'day' in m.group(1).lower() else 'MONTH'
+        if sign == '-':
+            return f"DATE_SUB(NOW(), INTERVAL {num} {unit})"
+        return f"DATE_ADD(NOW(), INTERVAL {num} {unit})"
+    sql = re.sub(
+        r"date\('now',\s*'([^']+)'\)",
+        _repl_date_offset,
+        sql,
+        flags=re.IGNORECASE
+    )
+    # 5. date('now') -> CURDATE()
+    sql = re.sub(r"date\('now'\)", 'CURDATE()', sql, flags=re.IGNORECASE)
+    return sql
+
+
 class _RowProxy:
     def __init__(self, data_dict):
         self._dict = data_dict
@@ -50,12 +93,7 @@ class _CursorProxy:
         
     def execute(self, sql, *args, **kwargs):
         if isinstance(sql, str):
-            sql = sql.replace('?', '%s')
-            # Translate SQLite specific INSERT OR IGNORE/REPLACE to MySQL
-            sql = sql.replace('INSERT OR IGNORE', 'INSERT IGNORE')
-            sql = sql.replace('insert or ignore', 'insert ignore')
-            sql = sql.replace('INSERT OR REPLACE', 'REPLACE')
-            sql = sql.replace('insert or replace', 'replace')
+            sql = _translate_sql(sql)
         return self._cursor.execute(sql, *args, **kwargs)
         
     def fetchone(self):
@@ -97,12 +135,7 @@ class _ConnectionProxy:
     def execute(self, sql, *args, **kwargs):
         if USE_MYSQL:
             if isinstance(sql, str):
-                sql = sql.replace('?', '%s')
-                # Translate SQLite specific INSERT OR IGNORE/REPLACE to MySQL
-                sql = sql.replace('INSERT OR IGNORE', 'INSERT IGNORE')
-                sql = sql.replace('insert or ignore', 'insert ignore')
-                sql = sql.replace('INSERT OR REPLACE', 'REPLACE')
-                sql = sql.replace('insert or replace', 'replace')
+                sql = _translate_sql(sql)
             cursor = self._conn.cursor()
             cursor.execute(sql, *args, **kwargs)
             return _CursorProxy(cursor)
