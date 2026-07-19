@@ -144,7 +144,7 @@
                 <div class="notif-msg">
                   {{ n.message[:80] }}{% if n.message|length > 80 %}...{% endif %}
                 </div>
-                <div class="notif-time">{{ n.created_at[:16] }}</div>
+                <div class="notif-time">{{ (n.created_at|string)[:16] }}</div>
               </div>
               {% endfor %} {% else %}
               <div

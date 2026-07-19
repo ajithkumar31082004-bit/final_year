@@ -237,7 +237,7 @@
                 <tbody>
                 {% for log in audit_logs[:15] %}
                 <tr>
-                    <td style="font-size:0.78rem;white-space:nowrap;">{{ log.created_at[:16] }}</td>
+                    <td style="font-size:0.78rem;white-space:nowrap;">{{ (log.created_at|string)[:16] }}</td>
                     <td><span class="badge badge-primary">{{ log.action }}</span></td>
                     <td style="font-size:0.8rem;">{{ log.first_name or 'System' }}</td>
                     <td style="font-size:0.78rem;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ log.details or '—' }}</td>
